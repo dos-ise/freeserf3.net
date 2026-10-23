@@ -74,6 +74,21 @@ public sealed class Game
     /// <summary>Whether the round has been won.</summary>
     public bool IsWon { get; private set; }
 
+    /// <summary>
+    /// Radius in which a military building claims territory around itself
+    /// (settlers-remake CommonConstants.TOWER_RADIUS).
+    /// </summary>
+    public const int TerritoryRadius = 40;
+
+    /// <summary>
+    /// Radius in which a military building attacks enemy settlers
+    /// (settlers-remake Constants.TOWER_ATTACKABLE_SEARCH_RADIUS).
+    /// </summary>
+    public const int AttackRadius = 40;
+
+    /// <summary>Per-cell territory owner (index = y * Size + x), 0 = no owner.</summary>
+    byte[] territory = Array.Empty<byte>();
+
     /// <summary>Creates the players from the map's player info.</summary>
     public void CreatePlayers()
     {
@@ -156,6 +171,11 @@ public sealed class Game
             player.Inventory.Set(Material.Plank, 20);
             player.Inventory.Set(Material.Stone, 20);
 
+            // A few weapons so the demo tower can recruit soldiers.
+            player.Inventory.Set(Material.Sword, 3);
+            player.Inventory.Set(Material.Bow, 2);
+            player.Inventory.Set(Material.Spear, 2);
+
             // The map's settlers of this player form the initial population.
             int count = Map.Settlers.Count(s => s.Party == player.Index);
             player.Population = count;
@@ -173,6 +193,8 @@ public sealed class Game
         var human = GetPlayer(0);
         if (human != null)
             TargetPopulation = human.Population + 20;
+
+        RecomputeTerritory();
     }
 
     /// <summary>Gets the player with the given index, or null.</summary>
@@ -288,6 +310,16 @@ public sealed class Game
         if (sawPos.HasValue)
         {
             var building = PlaceBuilding(BuildingType.Sawmill, sawPos.Value, 0);
+            if (building != null)
+                placed.Add(building);
+        }
+
+        // A military tower so the territory and soldier features are
+        // visible. It is placed a bit further away from the start.
+        var towerPos = FindDemoPosition(walkable, player.StartPosition, p => MapGeometry.GetDistance(p, player.StartPosition) >= 8);
+        if (towerPos.HasValue)
+        {
+            var building = PlaceBuilding(BuildingType.Tower, towerPos.Value, 0);
             if (building != null)
                 placed.Add(building);
         }
@@ -578,6 +610,225 @@ public sealed class Game
         if (player < 0 || player >= Networks.Count)
             return null;
         return Networks[player].StockFlag;
+    }
+
+    /// <summary>
+    /// Recomputes the territory grid from the military buildings. A cell is
+    /// claimed by the player whose military buildings cover it most often
+    /// (like the tower counter of settlers-remake); water cells are never
+    /// claimed. Both the buildings placed during play and the military
+    /// buildings from the map file claim territory. Called periodically by
+    /// the tick loop.
+    /// </summary>
+    public void RecomputeTerritory()
+    {
+        int size = Map.Size;
+        territory = new byte[size * size];
+        if (Players.Count == 0)
+            return;
+
+        var counts = new int[Players.Count];
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                var pos = new Position(x, y);
+                if (!IsWalkable(Map, pos))
+                    continue;
+
+                Array.Clear(counts, 0, counts.Length);
+                foreach (var building in Buildings)
+                {
+                    if (building.State != BuildingState.Active || !building.Definition.IsMilitary)
+                        continue;
+                    if (building.Definition.SoldierCapacity <= 0)
+                        continue; // barracks do not claim territory
+                    if (MapGeometry.GetDistance(building.Position, pos) > TerritoryRadius)
+                        continue;
+                    if (building.Player >= 0 && building.Player < counts.Length)
+                        counts[building.Player]++;
+                }
+
+                // The military buildings from the map file claim territory
+                // too (like settlers-remake, where the map's towers occupy
+                // their area from the start).
+                foreach (var mapBuilding in Map.Buildings)
+                {
+                    var type = BuildingTypeFromMap(mapBuilding.BuildingType);
+                    if (type == null)
+                        continue;
+                    var definition = BuildingDefinition.Get(type.Value);
+                    if (!definition.IsMilitary || definition.SoldierCapacity <= 0)
+                        continue;
+                    if (MapGeometry.GetDistance(new Position(mapBuilding.PosX, mapBuilding.PosY), pos) > TerritoryRadius)
+                        continue;
+                    if (mapBuilding.Party >= 0 && mapBuilding.Party < counts.Length)
+                        counts[mapBuilding.Party]++;
+                }
+
+                int best = 0;
+                for (int p = 1; p < counts.Length; p++)
+                {
+                    if (counts[p] > counts[best])
+                        best = p;
+                }
+                if (counts[best] > 0)
+                    territory[y * size + x] = (byte)best;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Maps a map-file building type byte to a game building type. The map
+    /// file uses the original game order (see settlers-remake
+    /// EOriginalMapBuildingType).
+    /// </summary>
+    public static BuildingType? BuildingTypeFromMap(byte buildingType)
+    {
+        return buildingType switch
+        {
+            1 => BuildingType.Stock,
+            2 => BuildingType.Lumberjack,
+            3 => BuildingType.Stonecutter,
+            4 => BuildingType.Sawmill,
+            5 => BuildingType.Forester,
+            6 => BuildingType.LookoutTower,
+            7 => BuildingType.Coalmine,
+            8 => BuildingType.Goldmine,
+            9 => BuildingType.Ironmine,
+            10 => BuildingType.Goldmelt,
+            11 => BuildingType.Ironmelt,
+            12 => BuildingType.Toolsmith,
+            13 => BuildingType.Weaponsmith,
+            14 => BuildingType.Winegrower,
+            15 => BuildingType.Tower,
+            16 => BuildingType.BigTower,
+            17 => BuildingType.Mill,
+            18 => BuildingType.Castle,
+            19 => BuildingType.Barrack,
+            20 => BuildingType.Baker,
+            21 => BuildingType.Slaughterhouse,
+            22 => BuildingType.Distillery,
+            23 => BuildingType.PigFarm,
+            24 => BuildingType.Farm,
+            25 => BuildingType.Fisher,
+            26 => BuildingType.SmallLivinghouse,
+            27 => BuildingType.MediumLivinghouse,
+            28 => BuildingType.BigLivinghouse,
+            29 => BuildingType.Sulfurmine,
+            30 => BuildingType.Waterworks,
+            32 => BuildingType.Dockyard,
+            33 => BuildingType.Harbor,
+            34 => BuildingType.MarketPlace,
+            35 => BuildingType.Hospital,
+            36 => BuildingType.RiceFarm,
+            37 => BuildingType.Gemsmine,
+            38 => BuildingType.Brewery,
+            39 => BuildingType.CharcoalBurner,
+            41 => BuildingType.BigTemple,
+            42 => BuildingType.Temple,
+            43 => BuildingType.BigTemple,
+            44 => BuildingType.Temple,
+            45 => BuildingType.BigTemple,
+            46 => BuildingType.Temple,
+            49 => BuildingType.DonkeyFarm,
+            51 => BuildingType.Beekeeping,
+            52 => BuildingType.MeadBrewery,
+            53 => BuildingType.Laboratory,
+            54 => BuildingType.Temple,
+            55 => BuildingType.BigTemple,
+            56 => BuildingType.Sulfurmine,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Gets the player who owns the territory at the given position, or 0
+    /// if no military building claims it.
+    /// </summary>
+    public byte GetTerritoryPlayer(Position pos)
+    {
+        if (!Map.IsInBounds(pos))
+            return 0;
+        return territory[pos.Y * Map.Size + pos.X];
+    }
+
+    /// <summary>
+    /// Advances the military: active military buildings recruit soldiers
+    /// from free settlers with weapons and attack enemy settlers in range.
+    /// </summary>
+    void TickMilitary()
+    {
+        // Soldier recruitment: an active military building with free
+        // capacity takes a free settler and a weapon from the player's
+        // stock and stations the soldier in the building.
+        foreach (var building in Buildings)
+        {
+            if (building.State != BuildingState.Active || !building.Definition.IsMilitary)
+                continue;
+            if (!building.HasSoldierCapacity)
+                continue;
+
+            var player = GetPlayer(building.Player);
+            if (player == null || player.FreeSettlers <= 0)
+                continue;
+            if (player.Inventory.WeaponCount <= 0)
+                continue;
+
+            // Take one weapon (sword, spear or bow).
+            Material weapon = MaterialExtensions.Weapons.First(w => player.Inventory.Get(w) > 0);
+            player.Inventory.Remove(weapon);
+            player.FreeSettlers--;
+
+            building.Soldiers.Add(new Serf(building.Player, building.Position, SerfType.Soldier));
+        }
+
+        // Tower attacks: military buildings with soldiers shoot at enemy
+        // settlers in range (checked every 30 ticks).
+        if (Tick % 30 != 0)
+            return;
+
+        foreach (var building in Buildings)
+        {
+            if (building.State != BuildingState.Active || !building.Definition.IsMilitary)
+                continue;
+            if (building.Soldiers.Count <= 0)
+                continue;
+
+            var target = FindEnemyInRange(building);
+            if (target == null)
+                continue;
+
+            // The enemy settler is defeated and removed from the game.
+            Settlers.Remove(target);
+            Collectors.Remove(target);
+            Builders.Remove(target);
+            ResourceWorkers.Remove(target);
+        }
+    }
+
+    /// <summary>
+    /// Finds the nearest enemy settler within the attack radius of the
+    /// given military building, or null.
+    /// </summary>
+    Serf? FindEnemyInRange(Building building)
+    {
+        Serf? nearest = null;
+        int nearestDistance = int.MaxValue;
+
+        foreach (var settler in Settlers)
+        {
+            if (settler.Player == building.Player)
+                continue;
+
+            int distance = MapGeometry.GetDistance(building.Position, settler.Position);
+            if (distance > AttackRadius || distance >= nearestDistance)
+                continue;
+
+            nearest = settler;
+            nearestDistance = distance;
+        }
+        return nearest;
     }
 
     /// <summary>
@@ -1187,6 +1438,13 @@ public sealed class Game
 
         // Resource workers cut trees and mine stones.
         TickResourceWorkers();
+
+        // Military buildings recruit soldiers and attack enemies.
+        TickMilitary();
+
+        // The territory is recomputed from the military buildings.
+        if (Tick % 30 == 0)
+            RecomputeTerritory();
 
         // Living houses grow the population over time.
         if (Tick % 600 == 0)

@@ -684,14 +684,17 @@ public sealed class GameView : IDisposable
 
         // Player border posts: drawn on land cells where the territory ends
         // - at the coast (a water neighbour) or at another player's land.
-        // Water cells themselves never get a border post (like
-        // settlers-remake, where blocked/sea cells are skipped).
+        // The territory is claimed by the military buildings (dynamic),
+        // like settlers-remake. Water cells themselves never get a border
+        // post (like settlers-remake, where blocked/sea cells are skipped).
         for (int y = 0; y < size; y++)
         {
             for (int x = 0; x < size; x++)
             {
+                var pos = new Position(x, y);
                 var cell = gameMap.GetCell(x, y);
-                if (cell.Player == 0)
+                int owner = game?.GetTerritoryPlayer(pos) ?? cell.Player;
+                if (owner == 0)
                     continue;
                 if (LandscapeMapping.IsWater(cell.Landscape))
                     continue;
@@ -699,7 +702,7 @@ public sealed class GameView : IDisposable
                 bool isBorder = false;
                 foreach (var direction in MapGeometry.AllDirections())
                 {
-                    var neighbor = new Position(x, y).GetNeighbor(direction);
+                    var neighbor = pos.GetNeighbor(direction);
                     if (!gameMap.IsInBounds(neighbor))
                         continue;
                     var neighborCell = gameMap.GetCell(neighbor);
@@ -709,7 +712,8 @@ public sealed class GameView : IDisposable
                         isBorder = true;
                         break;
                     }
-                    if (neighborCell.Player != cell.Player)
+                    int neighborOwner = game?.GetTerritoryPlayer(neighbor) ?? neighborCell.Player;
+                    if (neighborOwner != owner)
                     {
                         isBorder = true;
                         break;
@@ -717,7 +721,7 @@ public sealed class GameView : IDisposable
                 }
 
                 if (isBorder)
-                    gameObjects.AddBorder(new Position(x, y), cell.Height, cell.Player);
+                    gameObjects.AddBorder(pos, cell.Height, owner);
             }
         }
 
@@ -735,61 +739,7 @@ public sealed class GameView : IDisposable
     /// </summary>
     static BuildingType? BuildingTypeFromMap(byte buildingType)
     {
-        return buildingType switch
-        {
-            1 => BuildingType.Stock,
-            2 => BuildingType.Lumberjack,
-            3 => BuildingType.Stonecutter,
-            4 => BuildingType.Sawmill,
-            5 => BuildingType.Forester,
-            6 => BuildingType.LookoutTower,
-            7 => BuildingType.Coalmine,
-            8 => BuildingType.Goldmine,
-            9 => BuildingType.Ironmine,
-            10 => BuildingType.Goldmelt,
-            11 => BuildingType.Ironmelt,
-            12 => BuildingType.Toolsmith,
-            13 => BuildingType.Weaponsmith,
-            14 => BuildingType.Winegrower,
-            15 => BuildingType.Tower,
-            16 => BuildingType.BigTower,
-            17 => BuildingType.Mill,
-            18 => BuildingType.Castle,
-            19 => BuildingType.Barrack,
-            20 => BuildingType.Baker,
-            21 => BuildingType.Slaughterhouse,
-            22 => BuildingType.Distillery,
-            23 => BuildingType.PigFarm,
-            24 => BuildingType.Farm,
-            25 => BuildingType.Fisher,
-            26 => BuildingType.SmallLivinghouse,
-            27 => BuildingType.MediumLivinghouse,
-            28 => BuildingType.BigLivinghouse,
-            29 => BuildingType.Sulfurmine,
-            30 => BuildingType.Waterworks,
-            32 => BuildingType.Dockyard,
-            33 => BuildingType.Harbor,
-            34 => BuildingType.MarketPlace,
-            35 => BuildingType.Hospital,
-            36 => BuildingType.RiceFarm,
-            37 => BuildingType.Gemsmine,
-            38 => BuildingType.Brewery,
-            39 => BuildingType.CharcoalBurner,
-            41 => BuildingType.BigTemple,
-            42 => BuildingType.Temple,
-            43 => BuildingType.BigTemple,
-            44 => BuildingType.Temple,
-            45 => BuildingType.BigTemple,
-            46 => BuildingType.Temple,
-            49 => BuildingType.DonkeyFarm,
-            51 => BuildingType.Beekeeping,
-            52 => BuildingType.MeadBrewery,
-            53 => BuildingType.Laboratory,
-            54 => BuildingType.Temple,
-            55 => BuildingType.BigTemple,
-            56 => BuildingType.Sulfurmine,
-            _ => null
-        };
+        return Game.BuildingTypeFromMap(buildingType);
     }
 
     Matrix4x4 CreateViewProjection(int screenWidth, int screenHeight)

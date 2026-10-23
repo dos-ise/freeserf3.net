@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GameTests.cs - Tests for the game state and tick loop
  */
 
@@ -705,4 +705,93 @@ public class GameTests : DataTestBase
         Assert.IsTrue(delivered, "The trunk was not delivered to the sawmill.");
         Assert.AreEqual(0, player.Inventory.Get(Material.Trunk));
     }
+
+    [TestMethod]
+    public void MilitaryBuildingRecruitsSoldier()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 2 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 3, PosY = 3 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Build a tower and let it become active. Soldiers are recruited
+        // as soon as the tower is active.
+        var tower = game.PlaceBuilding(BuildingType.Tower, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, tower.State);
+
+        // The player has free settlers and weapons, so the tower recruits
+        // soldiers up to its capacity (3).
+        Assert.AreEqual(3, tower.Soldiers.Count);
+        Assert.IsTrue(tower.Soldiers.All(s => s.Type == SerfType.Soldier));
+        // 3 weapons consumed (sword first).
+        Assert.AreEqual(0, game.GetPlayer(0)!.Inventory.Get(Material.Sword));
+        Assert.AreEqual(2, game.GetPlayer(0)!.Inventory.Get(Material.Bow));
+        Assert.AreEqual(2, game.GetPlayer(0)!.Inventory.Get(Material.Spear));
+    }
+
+    [TestMethod]
+    public void MilitaryBuildingClaimsTerritory()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // No military buildings yet: no territory is claimed.
+        Assert.AreEqual(0, game.GetTerritoryPlayer(new Position(2, 2)));
+
+        // Build a tower and let it become active.
+        var tower = game.PlaceBuilding(BuildingType.Tower, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, tower.State);
+
+        // The tower claims the walkable cells around it (radius 40 covers
+        // the whole 8x8 map). The tower's own footprint is not walkable.
+        Assert.AreEqual(0, game.GetTerritoryPlayer(new Position(2, 2)));
+        Assert.AreEqual(0, game.GetTerritoryPlayer(new Position(0, 0)));
+        Assert.AreEqual(0, game.GetTerritoryPlayer(new Position(4, 4)));
+    }
+
+    [TestMethod]
+    public void TowerAttacksEnemyInRange()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Players.Add(new MapPlayerInfo { Name = "P1" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Build a tower, let it become active and recruit a soldier.
+        var tower = game.PlaceBuilding(BuildingType.Tower, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, tower.State);
+        Assert.AreEqual(1, tower.Soldiers.Count);
+
+        // An enemy settler appears near the tower.
+        var enemy = new Serf(1, new Position(4, 5), SerfType.Worker);
+        game.Settlers.Add(enemy);
+
+        // The tower attacks and defeats the enemy.
+        bool defeated = false;
+        for (int i = 0; i < 100 && !defeated; i++)
+        {
+            game.TickOnce();
+            defeated = !game.Settlers.Contains(enemy);
+        }
+
+        Assert.IsTrue(defeated, "The tower did not defeat the enemy settler.");
+    }
 }
+
