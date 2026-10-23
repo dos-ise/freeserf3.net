@@ -225,6 +225,7 @@ public class MainActivity : SilkActivity
             game = new Game(gameMap, 42);
             game.StartGame();
             Log.Debug(Tag, $"Round started: {game.Players.Count} players, target population {game.TargetPopulation}");
+            Log.Debug(Tag, $"Stacks: {game.Stacks.Count}, collectors: {game.Collectors.Count}");
 
             int size = map.WidthHeight;
             cameraOffset = new Vector2(-(size - 1) * 4f, -(size - 1) * 4.5f);
@@ -371,6 +372,28 @@ public class MainActivity : SilkActivity
                 if (!gameMap.IsInBounds(carrier.Position))
                     continue;
                 gameObjects.AddMovable(carrier.Position, gameMap.GetCell(carrier.Position).Height, carrier.Player, frame);
+            }
+        }
+
+        // Resource stacks on the map.
+        if (game != null)
+        {
+            foreach (var stack in game.Stacks)
+            {
+                if (stack.IsEmpty || !gameMap.IsInBounds(stack.Position))
+                    continue;
+                gameObjects.AddStack(stack.Position, gameMap.GetCell(stack.Position).Height, stack.Material, stack.Count);
+            }
+        }
+
+        // Carried goods above the collectors.
+        if (game != null)
+        {
+            foreach (var collector in game.Collectors)
+            {
+                if (!collector.IsCarrying || !gameMap.IsInBounds(collector.Position))
+                    continue;
+                gameObjects.AddCarriedGood(collector.Position, gameMap.GetCell(collector.Position).Height, collector.CarriedGood!.Value);
             }
         }
 

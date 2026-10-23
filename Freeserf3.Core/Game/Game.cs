@@ -47,6 +47,12 @@ public sealed class Game
     /// <summary>The walking settlers (created from the map's settlers).</summary>
     public List<Serf> Settlers { get; } = new();
 
+    /// <summary>The resource stacks on the map (from the map file).</summary>
+    public List<ResourceStack> Stacks { get; } = new();
+
+    /// <summary>The settlers that collect resources from the stacks.</summary>
+    public List<Serf> Collectors { get; } = new();
+
     /// <summary>The transport network of each player (index = player index).</summary>
     public List<TransportNetwork> Networks { get; } = new();
 
@@ -86,6 +92,7 @@ public sealed class Game
 
         // Create walking settlers from the map's settlers.
         Settlers.Clear();
+        Collectors.Clear();
         foreach (var mapSettler in Map.Settlers)
         {
             var serf = new Serf(mapSettler.Party, new Position(mapSettler.PosX, mapSettler.PosY), SerfType.Worker)
@@ -93,6 +100,23 @@ public sealed class Game
                 MoveInterval = 4
             };
             Settlers.Add(serf);
+        }
+
+        // Every third settler is a resource collector.
+        for (int i = 0; i < Settlers.Count; i += 3)
+        {
+            Settlers[i].Type = SerfType.Collector;
+            Collectors.Add(Settlers[i]);
+        }
+
+        // Create the resource stacks from the map file.
+        Stacks.Clear();
+        foreach (var mapStack in Map.Stacks)
+        {
+            var material = ResourceStack.FromMapStackType(mapStack.StackType);
+            if (material == null)
+                continue;
+            Stacks.Add(new ResourceStack(new Position(mapStack.PosX, mapStack.PosY), material.Value, mapStack.Count));
         }
 
         foreach (var player in Players)
@@ -201,6 +225,125 @@ public sealed class Game
         return false;
     }
 
+    /// <summary>Finds the nearest non-empty resource stack, or null.</summary>
+    public ResourceStack? FindNearestStack(Position position)
+    {
+        ResourceStack? nearest = null;
+        int nearestDistance = int.MaxValue;
+
+        foreach (var stack in Stacks)
+        {
+            if (stack.IsEmpty)
+                continue;
+
+            int distance = MapGeometry.GetDistance(position, stack.Position);
+            if (distance < nearestDistance)
+            {
+                nearest = stack;
+                nearestDistance = distance;
+            }
+        }
+        return nearest;
+    }
+
+    /// <summary>Gets the stock flag of the given player, or null.</summary>
+    public Flag? GetStockFlag(int player)
+    {
+        if (player < 0 || player >= Networks.Count)
+            return null;
+        return Networks[player].StockFlag;
+    }
+
+    /// <summary>
+    /// Advances the resource collectors: they walk to the nearest stack,
+    /// pick up a good and carry it to the player's stock.
+    /// </summary>
+    void TickCollectors()
+    {
+        foreach (var collector in Collectors)
+        {
+            switch (collector.CollectorState)
+            {
+                case CollectorState.LookingForStack:
+                    var stack = FindNearestStack(collector.Position);
+                    if (stack == null)
+                    {
+                        collector.CollectorState = CollectorState.Pausing;
+                        break;
+                    }
+
+                    collector.CollectorTarget = stack;
+                    var path = Pathfinder.FindPath(Map, collector.Position, stack.Position, IsWalkable);
+                    if (path != null && path.Count > 0)
+                    {
+                        collector.SetPath(path);
+                        collector.CollectorState = CollectorState.WalkingToStack;
+                    }
+                    else
+                    {
+                        collector.CollectorState = CollectorState.Pausing;
+                    }
+                    break;
+
+                case CollectorState.WalkingToStack:
+                    collector.Tick();
+                    if (collector.State != MovableState.Idle)
+                        break;
+
+                    // Arrived at the stack: pick up one good.
+                    var target = collector.CollectorTarget;
+                    if (target != null && !target.IsEmpty)
+                    {
+                        var material = target.TakeOne();
+                        if (material.HasValue)
+                        {
+                            collector.PickUp(material.Value);
+                            var stock = GetStockFlag(collector.Player);
+                            if (stock != null)
+                            {
+                                var toStock = Pathfinder.FindPath(Map, collector.Position, stock.Position, IsWalkable);
+                                if (toStock != null && toStock.Count > 0)
+                                {
+                                    collector.SetPath(toStock);
+                                    collector.CollectorState = CollectorState.WalkingToStock;
+                                    break;
+                                }
+                            }
+                            // No stock reachable: drop the good again.
+                            collector.Drop();
+                        }
+                    }
+                    collector.CollectorState = CollectorState.LookingForStack;
+                    break;
+
+                case CollectorState.WalkingToStock:
+                    collector.Tick();
+                    if (collector.State != MovableState.Idle)
+                        break;
+
+                    // Arrived at the stock: drop the good into the player's stock.
+                    var carried = collector.Drop();
+                    if (carried.HasValue)
+                    {
+                        var player = GetPlayer(collector.Player);
+                        if (player != null)
+                            player.Inventory.Add(carried.Value);
+                    }
+                    collector.CollectorState = CollectorState.LookingForStack;
+                    break;
+
+                case CollectorState.Pausing:
+                    collector.IdleTicks++;
+                    if (collector.IdleTicks >= 30)
+                    {
+                        collector.IdleTicks = 0;
+                        collector.CollectorState = CollectorState.LookingForStack;
+                    }
+                    break;
+            }
+        }
+    }
+
     /// <summary>
     /// Advances the game by one tick. The clock is incremented and all
     /// buildings are simulated (construction, worker assignment and
@@ -280,6 +423,8 @@ public sealed class Game
         // new walk target.
         foreach (var settler in Settlers)
         {
+            if (settler.Type == SerfType.Collector)
+                continue;
             settler.Tick();
             if (settler.State == MovableState.Idle)
             {
@@ -291,6 +436,10 @@ public sealed class Game
                 }
             }
         }
+
+        // Resource collectors walk to stacks, pick up goods and carry them
+        // to the player's stock.
+        TickCollectors();
 
         // Living houses grow the population over time.
         if (Tick % 600 == 0)

@@ -154,6 +154,7 @@ public sealed class MainWindow : IDisposable
         game = new Freeserf3.Simulation.Game(gameMap, 42);
         game.StartGame();
         Console.WriteLine($"Round started: {game.Players.Count} players, target population {game.TargetPopulation}");
+        Console.WriteLine($"Stacks: {game.Stacks.Count}, collectors: {game.Collectors.Count}");
 
         // Center the camera on the map. The map's screen-space bounding box
         // is x: [-(size-1)*8, (size-1)*16], y: [0, (size-1)*9]; its center
@@ -287,6 +288,28 @@ public sealed class MainWindow : IDisposable
                 if (!gameMap.IsInBounds(carrier.Position))
                     continue;
                 gameObjects.AddMovable(carrier.Position, gameMap.GetCell(carrier.Position).Height, carrier.Player, frame);
+            }
+        }
+
+        // Resource stacks on the map.
+        if (game != null)
+        {
+            foreach (var stack in game.Stacks)
+            {
+                if (stack.IsEmpty || !gameMap.IsInBounds(stack.Position))
+                    continue;
+                gameObjects.AddStack(stack.Position, gameMap.GetCell(stack.Position).Height, stack.Material, stack.Count);
+            }
+        }
+
+        // Carried goods above the collectors.
+        if (game != null)
+        {
+            foreach (var collector in game.Collectors)
+            {
+                if (!collector.IsCarrying || !gameMap.IsInBounds(collector.Position))
+                    continue;
+                gameObjects.AddCarriedGood(collector.Position, gameMap.GetCell(collector.Position).Height, collector.CarriedGood!.Value);
             }
         }
 

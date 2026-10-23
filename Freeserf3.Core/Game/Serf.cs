@@ -22,7 +22,26 @@ public enum SerfType
     Soldier,
 
     /// <summary>Works in a production building.</summary>
-    Worker
+    Worker,
+
+    /// <summary>Collects resources from map stacks and carries them to the stock.</summary>
+    Collector
+}
+
+/// <summary>The states of a resource collector.</summary>
+public enum CollectorState
+{
+    /// <summary>Looking for the nearest resource stack.</summary>
+    LookingForStack,
+
+    /// <summary>Walking to the resource stack.</summary>
+    WalkingToStack,
+
+    /// <summary>Walking to the player's stock flag with a carried good.</summary>
+    WalkingToStock,
+
+    /// <summary>Pausing before looking for the next stack.</summary>
+    Pausing
 }
 
 /// <summary>
@@ -38,10 +57,16 @@ public sealed class Serf : Movable
     }
 
     /// <summary>The role of this settler.</summary>
-    public SerfType Type { get; }
+    public SerfType Type { get; set; }
 
     /// <summary>The profession when working in a building.</summary>
     public WorkerType Profession { get; set; } = WorkerType.None;
+
+    /// <summary>Collector state (only used by collectors).</summary>
+    public CollectorState CollectorState { get; set; } = CollectorState.LookingForStack;
+
+    /// <summary>The resource stack the collector is heading to.</summary>
+    public ResourceStack? CollectorTarget { get; set; }
 
     /// <summary>The good currently carried, or null.</summary>
     public Material? CarriedGood { get; set; }

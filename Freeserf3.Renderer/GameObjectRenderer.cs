@@ -71,6 +71,42 @@ public sealed class GameObjectRenderer : IDisposable
     /// <summary>Tree sprite sequences in the objects file (from settlers-remake).</summary>
     public static readonly int[] TreeSequences = { 1, 2, 4, 7, 8, 16, 17 };
 
+    /// <summary>Stack sprite sequence per material in the objects file (from settlers-remake EMaterialType).</summary>
+    public static readonly Dictionary<Material, int> StackSequences = new()
+    {
+        [Material.Plank] = 33,
+        [Material.Stone] = 43,
+        [Material.Trunk] = 41,
+        [Material.Bread] = 49,
+        [Material.Coal] = 34,
+        [Material.GoldOre] = 36,
+        [Material.IronOre] = 39,
+        [Material.Fish] = 47,
+        [Material.Crop] = 50,
+        [Material.Gold] = 37,
+        [Material.Iron] = 42,
+        [Material.Blade] = 55,
+        [Material.Hammer] = 51,
+        [Material.Axe] = 46,
+        [Material.Pick] = 53,
+        [Material.Saw] = 54,
+        [Material.FishingRod] = 66,
+        [Material.Sword] = 59,
+        [Material.Bow] = 63,
+        [Material.Spear] = 60,
+        [Material.Wine] = 69,
+        [Material.Flour] = 48,
+        [Material.Pig] = 73,
+        [Material.Meat] = 52,
+        [Material.Sulfur] = 80,
+        [Material.Water] = 77,
+        [Material.Rice] = 78,
+        [Material.Gems] = 79,
+        [Material.Keg] = 70,
+        [Material.Scythe] = 56,
+        [Material.Honey] = 89
+    };
+
     /// <summary>Building sprite sequence per building type (from the building XMLs).</summary>
     public static readonly Dictionary<BuildingType, int> BuildingSequences = new()
     {
@@ -127,6 +163,7 @@ public sealed class GameObjectRenderer : IDisposable
     readonly Dictionary<(int Color, int Sequence), SpriteImage[]> settlerImages = new();
     readonly Dictionary<int, SpriteImage[]> treeImages = new();
     readonly Dictionary<int, SpriteImage> borderImages = new();
+    readonly Dictionary<int, SpriteImage[]> stackImages = new();
     SpriteImage? flagImage;
     SpriteImage? roadImage;
     TextureRegion whiteRegion;
@@ -247,6 +284,21 @@ public sealed class GameObjectRenderer : IDisposable
             }
         }
         Console.WriteLine($"Borders: {borderImages.Count} colors loaded");
+
+        // Resource stack images (one sequence per material, one frame per
+        // stack size).
+        foreach (int sequence in StackSequences.Values.Distinct())
+        {
+            var frames = objects.GetSettlerSequence(sequence);
+            if (frames.Length == 0)
+                continue;
+
+            var images = new SpriteImage[frames.Length];
+            for (int i = 0; i < frames.Length; i++)
+                images[i] = AddToAtlas(frames[i]);
+            stackImages[sequence] = images;
+        }
+        Console.WriteLine($"Stacks: {stackImages.Count} sequences loaded");
     }
 
     // Tints a grayscale image with the given color (used for border posts).
@@ -454,6 +506,40 @@ public sealed class GameObjectRenderer : IDisposable
             return;
 
         AddSprite(image, pos, height, 0.05f);
+    }
+
+    /// <summary>
+    /// Adds a resource stack sprite at the given grid position. The frame
+    /// shows the number of goods on the stack.
+    /// </summary>
+    public void AddStack(Position pos, int height, Material material, int count)
+    {
+        if (!StackSequences.TryGetValue(material, out int sequence))
+            return;
+        if (!stackImages.TryGetValue(sequence, out var frames) || frames.Length == 0)
+            return;
+
+        int frame = Math.Clamp(count - 1, 0, frames.Length - 1);
+        AddSprite(frames[frame], pos, height, 0.25f);
+    }
+
+    /// <summary>
+    /// Adds a small carried-good indicator above the given position (used
+    /// for settlers carrying a resource).
+    /// </summary>
+    public void AddCarriedGood(Position pos, int height, Material material)
+    {
+        if (!StackSequences.TryGetValue(material, out int sequence))
+            return;
+        if (!stackImages.TryGetValue(sequence, out var frames) || frames.Length == 0)
+            return;
+
+        var image = frames[0];
+        var (mapX, mapY) = MapGeometry.GridToScreen(pos, height);
+        // Draw a small version of the good above the settler.
+        float w = image.Width * 0.5f;
+        float h = image.Height * 0.5f;
+        sprites.Add(image.Region, mapX + image.OffsetX * 0.5f, mapY + image.OffsetY * 0.5f - 20f, w, h, 0.6f);
     }
 
     /// <summary>

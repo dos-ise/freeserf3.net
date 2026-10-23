@@ -273,16 +273,61 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void StartGameCreatesResourceStacks()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Stacks.Add(new MapStack { PosX = 2, PosY = 2, StackType = 1, Count = 6 }); // Plank
+        map.Stacks.Add(new MapStack { PosX = 3, PosY = 3, StackType = 2, Count = 4 }); // Stone
+        map.Stacks.Add(new MapStack { PosX = 4, PosY = 4, StackType = 99, Count = 5 }); // Unknown
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        Assert.AreEqual(2, game.Stacks.Count);
+        Assert.AreEqual(Material.Plank, game.Stacks[0].Material);
+        Assert.AreEqual(6, game.Stacks[0].Count);
+        Assert.AreEqual(Material.Stone, game.Stacks[1].Material);
+    }
+
+    [TestMethod]
+    public void CollectorPicksUpAndCarriesToStock()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 8, PosY = 8 });
+        map.Stacks.Add(new MapStack { PosX = 9, PosY = 8, StackType = 1, Count = 6 }); // Plank
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // The first settler is a collector.
+        var collector = game.Collectors[0];
+        Assert.AreEqual(SerfType.Collector, collector.Type);
+        Assert.AreEqual(6, game.Stacks[0].Count); // stack not yet touched
+
+        // Let the collector walk to the stack, pick up and carry to stock.
+        for (int i = 0; i < 200; i++)
+            game.TickOnce();
+
+        // The stack lost goods and the player's stock gained them.
+        Assert.IsTrue(game.Stacks[0].Count < 6);
+        Assert.AreEqual(10 + (6 - game.Stacks[0].Count), game.GetPlayer(0)!.Inventory.Get(Material.Plank));
+    }
+
+    [TestMethod]
     public void SettlersWanderWhenIdle()
     {
         var map = new Map(16);
         map.Players.Add(new MapPlayerInfo { Name = "P0" });
         map.Settlers.Add(new MapSettler { Party = 0, PosX = 8, PosY = 8 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 9, PosY = 8 });
         SetGrass(map);
         var game = new Game(map, 42);
         game.StartGame();
 
-        var settler = game.Settlers[0];
+        // The second settler is a wanderer (the first is a collector).
+        var settler = game.Settlers[1];
         Assert.AreEqual(MovableState.Idle, settler.State);
 
         // After the idle pause the settler picks a walk target.
