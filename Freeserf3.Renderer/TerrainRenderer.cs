@@ -1,0 +1,286 @@
+/*
+ * TerrainRenderer.cs - Renders the Settlers 3 terrain
+ *
+ * Geometry approach ported from settlers-remake (MIT) Background.java:
+ * each map cell is split into two triangles (up/down); the texture for each
+ * triangle is the base landscape image or a border transition texture.
+ *
+ * freeserf3.net is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
+using Freeserf3.Data;
+using Freeserf3.Render;
+using Silk.NET.OpenGL;
+using System.Numerics;
+
+namespace Freeserf3.Renderer;
+
+/// <summary>Renders the terrain of a Settlers 3 map.</summary>
+public sealed class TerrainRenderer : IDisposable
+{
+    // Hex grid geometry (from settlers-remake DrawConstants).
+    const float DistanceX = 16f;
+    const float DistanceY = 9f;
+    const float TextureUnitY = 16f;
+    const float HeightScale = 2f;
+
+    // Texture coordinates (normalized within a 32x32 tile) for the two
+    // triangle orientations. From settlers-remake ETextureOrientation.java,
+    // converted from pixel units (TEXTUREUNIT=16, TEXTURE_GRID=32) to [0,1].
+    static readonly float[] ContinuousUp = { 0.25f, 0f, 0f, 0.5f, 0.5f, 0.5f };
+    static readonly float[] ContinuousDown = { 0.25f, 0f, 0.5f, 0.5f, 0.75f, 0f };
+    static readonly float[] Bottom = { 0.5f, 0.5f, 0.25f, 1f, 0.75f, 1f };
+    static readonly float[] Top = { 0.25f, 0f, 0.5f, 0.5f, 0.75f, 0f };
+    static readonly float[] TopRight = { 0.75f, 0f, 0.5f, 0.5f, 1f, 0.5f };
+    static readonly float[] BottomRight = { 0.5f, 0.5f, 0.75f, 1f, 1f, 0.5f };
+    static readonly float[] TopLeft = { 0.25f, 0f, 0f, 0.5f, 0.5f, 0.5f };
+    static readonly float[] BottomLeft = { 0f, 0.5f, 0.25f, 1f, 0.5f, 0.5f };
+
+    readonly GL gl;
+    readonly ShaderProgram shader;
+    readonly TextureAtlas atlas;
+    readonly Dictionary<int, TextureRegion> textureRegions = new();
+    readonly uint vao;
+    readonly uint vbo;
+    readonly uint ebo;
+    int vertexCount;
+    int indexCount;
+
+    public TerrainRenderer(GL gl)
+    {
+        this.gl = gl;
+        atlas = new TextureAtlas(gl);
+        shader = CreateShader(gl);
+
+        vao = gl.GenVertexArray();
+        vbo = gl.GenBuffer();
+        ebo = gl.GenBuffer();
+
+        gl.BindVertexArray(vao);
+        gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
+        gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, ebo);
+
+        // Vertex layout: position (3 floats), uv (2 floats), color (1 float).
+        const uint stride = 6 * sizeof(float);
+        gl.EnableVertexAttribArray(0);
+        gl.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, stride, 0);
+        gl.EnableVertexAttribArray(1);
+        gl.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, stride, 3 * sizeof(float));
+        gl.EnableVertexAttribArray(2);
+        gl.VertexAttribPointer(2, 1, VertexAttribPointerType.Float, false, stride, 5 * sizeof(float));
+
+        gl.BindVertexArray(0);
+    }
+
+    /// <summary>Builds the terrain geometry from a map and its landscape images.</summary>
+    public void Build(MapFileReader map, DatFileReader gfx)
+    {
+        var area = map.Area ?? throw new InvalidOperationException("Map area not loaded.");
+        int size = map.WidthHeight;
+
+        // Load all landscape images into the atlas.
+        for (int i = 0; i < gfx.LandscapeCount; i++)
+        {
+            var image = gfx.GetLandscape(i);
+            if (image == null)
+                continue;
+            textureRegions[i] = atlas.AddImage(image.Rgba, image.Width, image.Height);
+        }
+
+        // Build the vertex data: 2 triangles per cell, 3 vertices each.
+        var vertices = new List<float>(size * size * 2 * 3 * 6);
+        var indices = new List<uint>(size * size * 2 * 3);
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                AddCell(vertices, indices, map, x, y);
+            }
+        }
+
+        vertexCount = vertices.Count / 6;
+        indexCount = indices.Count;
+
+        Console.WriteLine($"Terrain: {vertexCount} vertices, {indexCount} indices, atlas {atlas.Texture.Width}x{atlas.Texture.Height}");
+
+        gl.BindVertexArray(vao);
+        gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
+        gl.BufferData(BufferTargetARB.ArrayBuffer, vertices.ToArray(), BufferUsageARB.StaticDraw);
+        gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, ebo);
+        gl.BufferData(BufferTargetARB.ElementArrayBuffer, indices.ToArray(), BufferUsageARB.StaticDraw);
+        gl.BindVertexArray(0);
+    }
+
+    void AddCell(List<float> vertices, List<uint> indices, MapFileReader map, int x, int y)
+    {
+        int size = map.WidthHeight;
+        var area = map.Area!;
+
+        LandscapeType? GetType(int gx, int gy)
+        {
+            if (gx < 0 || gx >= size || gy < 0 || gy >= size)
+                return null;
+            return LandscapeMapping.FromMapValue(area[gy * size + gx].Landscape);
+        }
+
+        byte GetHeight(int gx, int gy)
+        {
+            if (gx < 0 || gx >= size || gy < 0 || gy >= size)
+                return 0;
+            return area[gy * size + gx].Height;
+        }
+
+        // Up triangle: (x, y+1), (x, y), (x+1, y+1)
+        var leftUp = GetType(x, y + 1) ?? LandscapeType.Grass;
+        var centerUp = GetType(x, y) ?? LandscapeType.Grass;
+        var rightUp = GetType(x + 1, y + 1) ?? LandscapeType.Grass;
+        int texUp = LandscapeMapping.GetTextureIndex(leftUp, centerUp, rightUp, (x * 37 + y * 17) & 1);
+        AddTriangle(vertices, indices,
+            (x, y + 1, GetHeight(x, y + 1)),
+            (x, y, GetHeight(x, y)),
+            (x + 1, y + 1, GetHeight(x + 1, y + 1)),
+            texUp, true, leftUp == rightUp, leftUp == centerUp);
+
+        // Down triangle: (x, y), (x+1, y+1), (x+1, y)
+        var leftDown = GetType(x, y) ?? LandscapeType.Grass;
+        var centerDown = GetType(x + 1, y + 1) ?? LandscapeType.Grass;
+        var rightDown = GetType(x + 1, y) ?? LandscapeType.Grass;
+        int texDown = LandscapeMapping.GetTextureIndex(leftDown, centerDown, rightDown, x & 1);
+        AddTriangle(vertices, indices,
+            (x, y, GetHeight(x, y)),
+            (x + 1, y + 1, GetHeight(x + 1, y + 1)),
+            (x + 1, y, GetHeight(x + 1, y)),
+            texDown, false, leftDown == rightDown, leftDown == centerDown);
+    }
+
+    void AddTriangle(List<float> vertices, List<uint> indices,
+        (int X, int Y, int Height) p1, (int X, int Y, int Height) p2, (int X, int Y, int Height) p3,
+        int textureIndex, bool up, bool leftEqualsRight, bool leftEqualsCenter)
+    {
+        if (!textureRegions.TryGetValue(textureIndex, out var region))
+            return;
+
+        float[] texCoords;
+        if (leftEqualsRight && leftEqualsCenter)
+        {
+            texCoords = up ? ContinuousUp : ContinuousDown;
+        }
+        else if (leftEqualsRight)
+        {
+            texCoords = up ? Bottom : Top;
+        }
+        else if (leftEqualsCenter)
+        {
+            texCoords = up ? TopLeft : BottomLeft;
+        }
+        else
+        {
+            texCoords = up ? TopRight : BottomRight;
+        }
+
+        uint baseIndex = (uint)(vertices.Count / 6);
+        indices.Add(baseIndex);
+        indices.Add(baseIndex + 1);
+        indices.Add(baseIndex + 2);
+
+        AddVertex(vertices, p1, texCoords[0], texCoords[1], region);
+        AddVertex(vertices, p2, texCoords[2], texCoords[3], region);
+        AddVertex(vertices, p3, texCoords[4], texCoords[5], region);
+    }
+
+    void AddVertex(List<float> vertices, (int X, int Y, int Height) p, float u, float v, TextureRegion region)
+    {
+        float color = 0.875f;
+        vertices.Add(p.X);
+        vertices.Add(p.Y);
+        vertices.Add(p.Height);
+        vertices.Add(region.U0 + u * (region.U1 - region.U0));
+        vertices.Add(region.V0 + v * (region.V1 - region.V0));
+        vertices.Add(color);
+    }
+
+    /// <summary>Draws the terrain with the given view transform.</summary>
+    public void Draw(in Matrix4x4 viewProjection, float zoom)
+    {
+        shader.Use();
+        shader.SetUniformMatrix4("uViewProjection", viewProjection);
+        shader.SetUniform1("uZoom", zoom);
+        shader.SetUniform1("uDistanceX", DistanceX);
+        shader.SetUniform1("uDistanceY", DistanceY);
+        shader.SetUniform1("uTextureUnitY", TextureUnitY);
+        shader.SetUniform1("uHeightScale", HeightScale);
+
+        atlas.Texture.Bind(0);
+        shader.SetUniform1("uTexture", 0);
+
+        gl.BindVertexArray(vao);
+        unsafe
+        {
+            gl.DrawElements(PrimitiveType.Triangles, (uint)indexCount, DrawElementsType.UnsignedInt, (void*)0);
+        }
+        gl.BindVertexArray(0);
+    }
+
+    static ShaderProgram CreateShader(GL gl)
+    {
+        string version = State.GetShaderVersionDirective();
+
+        string vertexSource = $@"
+{version}
+in vec3 aPosition;
+in vec2 aUv;
+in float aColor;
+
+uniform mat4 uViewProjection;
+uniform float uZoom;
+uniform float uDistanceX;
+uniform float uDistanceY;
+uniform float uTextureUnitY;
+uniform float uHeightScale;
+
+out vec2 vUv;
+out float vColor;
+
+void main()
+{{
+    float screenX = aPosition.x * uDistanceX - aPosition.y * uDistanceX / 2.0;
+    float screenY = aPosition.y * uTextureUnitY - aPosition.z * uHeightScale;
+    vec4 pos = vec4(screenX * uZoom, screenY * uZoom, 0.0, 1.0);
+    gl_Position = uViewProjection * pos;
+    vUv = aUv;
+    vColor = aColor;
+}}
+";
+
+        string fragmentSource = $@"
+{version}
+in vec2 vUv;
+in float vColor;
+
+uniform sampler2D uTexture;
+
+out vec4 fragColor;
+
+void main()
+{{
+    vec4 tex = texture(uTexture, vUv);
+    fragColor = vec4(tex.rgb * vColor, tex.a);
+}}
+";
+
+        return new ShaderProgram(gl, vertexSource, fragmentSource);
+    }
+
+    public void Dispose()
+    {
+        gl.DeleteVertexArray(vao);
+        gl.DeleteBuffer(vbo);
+        gl.DeleteBuffer(ebo);
+        shader.Dispose();
+        atlas.Dispose();
+    }
+}
