@@ -138,7 +138,7 @@ public class MainActivity : SilkActivity
                 return;
             }
 
-            string? mapFile = gameData.FindMapFiles().FirstOrDefault();
+            string? mapFile = gameData.FindSinglePlayerMapFiles().FirstOrDefault();
             if (mapFile == null)
             {
                 Log.Error(Tag, "No map file found.");
@@ -217,9 +217,9 @@ public class MainActivity : SilkActivity
 
         // Orthographic projection centered on the origin: the map center
         // (translated to (0,0) by the camera offset) lands in the middle of
-        // the screen. Y grows downward (bottom=-h/2, top=+h/2) to match the
+        // the screen. Y grows downward (bottom=+h/2, top=-h/2) to match the
         // map geometry.
-        var projection = Matrix4x4.CreateOrthographicOffCenter(-width / 2, width / 2, -height / 2, height / 2, -1, 1);
+        var projection = Matrix4x4.CreateOrthographicOffCenter(-width / 2, width / 2, height / 2, -height / 2, -1, 1);
         var viewMatrix = Matrix4x4.CreateTranslation(cameraOffset.X * zoom, cameraOffset.Y * zoom, 0);
         terrain.Draw(viewMatrix * projection, zoom);
 

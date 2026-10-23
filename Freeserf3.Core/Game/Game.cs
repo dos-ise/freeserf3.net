@@ -38,6 +38,9 @@ public sealed class Game
     /// <summary>The game clock, incremented once per tick.</summary>
     public ulong Tick { get; private set; }
 
+    /// <summary>All buildings placed during play (not the map-file ones).</summary>
+    public List<Building> Buildings { get; } = new();
+
     /// <summary>Creates the players from the map's player info.</summary>
     public void CreatePlayers()
     {
@@ -62,11 +65,27 @@ public sealed class Game
     }
 
     /// <summary>
-    /// Advances the game by one tick. The clock is incremented and the
-    /// simulation steps run (added in later milestones).
+    /// Places a new building for the given player. The building starts as a
+    /// construction site and is built over time.
+    /// </summary>
+    public Building PlaceBuilding(BuildingType type, Position position, int playerIndex)
+    {
+        var building = new Building(type, position, playerIndex);
+        Buildings.Add(building);
+        return building;
+    }
+
+    /// <summary>
+    /// Advances the game by one tick. The clock is incremented and all
+    /// buildings are simulated (construction and production).
     /// </summary>
     public void TickOnce()
     {
         Tick++;
+
+        foreach (var building in Buildings)
+        {
+            building.Tick(GetPlayer(building.Player));
+        }
     }
 }

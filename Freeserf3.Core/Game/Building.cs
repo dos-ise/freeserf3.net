@@ -64,6 +64,23 @@ public sealed class Building
     /// <summary>Goods produced and waiting to be picked up.</summary>
     public Inventory Output { get; } = new();
 
+    /// <summary>Construction materials already delivered to the site.</summary>
+    public Inventory DeliveredMaterials { get; } = new();
+
+    /// <summary>Whether all construction materials have been delivered.</summary>
+    public bool IsFullySupplied
+    {
+        get
+        {
+            foreach (var (material, count) in Definition.ConstructionCosts)
+            {
+                if (DeliveredMaterials.Get(material) < count)
+                    return false;
+            }
+            return true;
+        }
+    }
+
     /// <summary>Whether the building has its required worker.</summary>
     public bool HasWorker => Worker != WorkerType.None;
 
@@ -121,16 +138,15 @@ public sealed class Building
     }
 
     /// <summary>
-    /// Advances the building by one tick. Construction sites gain progress;
-    /// active producers consume inputs and produce their output.
+    /// Advances the building by one tick. Construction sites consume one
+    /// construction material from the player's stock per tick and gain
+    /// progress; active producers consume inputs and produce their output.
     /// </summary>
-    public void Tick()
+    public void Tick(Player? player = null)
     {
         if (State == BuildingState.ConstructionSite)
         {
-            // Construction progress is driven by delivered materials and
-            // bricklayers (M2.4); here we only advance when materials are
-            // present.
+            TickConstruction(player);
             return;
         }
 
@@ -153,6 +169,33 @@ public sealed class Building
         if (ProductionProgress >= Definition.ProductionTime)
         {
             CompleteProduction();
+        }
+    }
+
+    // Delivers one construction material from the player's stock and
+    // advances the construction progress. The building becomes active once
+    // all materials are delivered.
+    void TickConstruction(Player? player)
+    {
+        if (player == null)
+            return;
+
+        foreach (var (material, count) in Definition.ConstructionCosts)
+        {
+            int delivered = DeliveredMaterials.Get(material);
+            if (delivered >= count)
+                continue;
+
+            if (!player.Inventory.Remove(material))
+                continue;
+
+            DeliveredMaterials.Add(material);
+            int total = Definition.TotalConstructionCost;
+            int deliveredTotal = DeliveredMaterials.TotalCount;
+            ConstructionProgress = Math.Min(100, deliveredTotal * 100 / total);
+            if (ConstructionProgress >= 100)
+                State = BuildingState.Active;
+            return;
         }
     }
 

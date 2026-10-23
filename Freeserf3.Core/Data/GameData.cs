@@ -91,6 +91,29 @@ public sealed class GameData
             yield return file;
     }
 
+    /// <summary>
+    /// Lists single-player map files first (SINGLE folder), then the rest.
+    /// Single-player maps contain pre-placed buildings and settlers.
+    /// </summary>
+    public IEnumerable<string> FindSinglePlayerMapFiles()
+    {
+        if (!Directory.Exists(MapPath))
+            yield break;
+
+        var singlePath = Path.Combine(MapPath, "SINGLE");
+        if (Directory.Exists(singlePath))
+        {
+            foreach (var file in Directory.EnumerateFiles(singlePath, "*.map", SearchOption.AllDirectories))
+                yield return file;
+        }
+
+        foreach (var file in Directory.EnumerateFiles(MapPath, "*.map", SearchOption.AllDirectories))
+        {
+            if (!file.StartsWith(singlePath, StringComparison.OrdinalIgnoreCase))
+                yield return file;
+        }
+    }
+
     /// <summary>Loads a map file reader.</summary>
     public MapFileReader LoadMap(string path)
     {

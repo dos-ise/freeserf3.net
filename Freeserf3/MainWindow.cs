@@ -95,10 +95,12 @@ public sealed class MainWindow : IDisposable
         input.Keyboards[0].KeyDown += OnKeyDown;
 
         // Load the map (first found or the one given on the command line).
+        // Prefer single-player maps, which contain pre-placed buildings and
+        // settlers.
         string? mapFile = Program.MapFile;
         if (mapFile == null)
         {
-            mapFile = gameData.FindMapFiles().FirstOrDefault();
+            mapFile = gameData.FindSinglePlayerMapFiles().FirstOrDefault();
         }
 
         if (mapFile == null)
@@ -316,9 +318,9 @@ public sealed class MainWindow : IDisposable
 
         // Orthographic projection centered on the origin: the map center
         // (translated to (0,0) by the camera offset) lands in the middle of
-        // the screen. Y grows downward (bottom=-h/2, top=+h/2) to match the
+        // the screen. Y grows downward (bottom=+h/2, top=-h/2) to match the
         // map geometry.
-        var projection = Matrix4x4.CreateOrthographicOffCenter(-width / 2, width / 2, -height / 2, height / 2, -1, 1);
+        var projection = Matrix4x4.CreateOrthographicOffCenter(-width / 2, width / 2, height / 2, -height / 2, -1, 1);
 
         // Camera translation (in map pixels, scaled by zoom).
         var view = Matrix4x4.CreateTranslation(cameraOffset.X * zoom, cameraOffset.Y * zoom, 0);
