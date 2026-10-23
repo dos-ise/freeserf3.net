@@ -156,6 +156,12 @@ public sealed class MainWindow : IDisposable
         Console.WriteLine($"Round started: {game.Players.Count} players, target population {game.TargetPopulation}");
         Console.WriteLine($"Stacks: {game.Stacks.Count}, collectors: {game.Collectors.Count}");
 
+        // Demo: place a construction site so the building feature is visible.
+        var demoBuilding = game.PlaceDemoBuilding(BuildingType.Sawmill);
+        Console.WriteLine(demoBuilding != null
+            ? $"Demo construction site: {demoBuilding.Type} at {demoBuilding.Position}"
+            : "No position for a demo construction site found.");
+
         // Center the camera on the map. The map's screen-space bounding box
         // is x: [-(size-1)*8, (size-1)*16], y: [0, (size-1)*9]; its center
         // is ((size-1)*4, (size-1)*4.5). The projection is centered on the

@@ -183,6 +183,38 @@ public sealed class Game
     }
 
     /// <summary>
+    /// Places a building for the human player near their start position so
+    /// the construction site feature is visible right away (demo helper).
+    /// Returns null if no suitable position was found.
+    /// </summary>
+    public Building? PlaceDemoBuilding(BuildingType type)
+    {
+        var player = GetPlayer(0);
+        if (player == null)
+            return null;
+
+        // Search a few cells around the start position, keeping clear of
+        // the stock flag's 3x3 footprint.
+        for (int dx = -5; dx <= 5; dx++)
+        {
+            for (int dy = -5; dy <= 5; dy++)
+            {
+                if (Math.Max(Math.Abs(dx), Math.Abs(dy)) < 3)
+                    continue;
+
+                var pos = new Position(player.StartPosition.X + dx, player.StartPosition.Y + dy);
+                if (!Map.IsInBounds(pos) || !IsWalkable(Map, pos))
+                    continue;
+                if (IsBuildingAt(pos))
+                    continue;
+
+                return PlaceBuilding(type, pos, 0);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Finds a walkable cell for the building's flag (its entrance). The
     /// flag is placed on the first walkable cell just outside the building's
     /// footprint so the road can connect even though the building blocks

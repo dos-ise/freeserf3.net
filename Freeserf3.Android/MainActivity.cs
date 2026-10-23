@@ -227,6 +227,12 @@ public class MainActivity : SilkActivity
             Log.Debug(Tag, $"Round started: {game.Players.Count} players, target population {game.TargetPopulation}");
             Log.Debug(Tag, $"Stacks: {game.Stacks.Count}, collectors: {game.Collectors.Count}");
 
+            // Demo: place a construction site so the building feature is visible.
+            var demoBuilding = game.PlaceDemoBuilding(BuildingType.Sawmill);
+            Log.Debug(Tag, demoBuilding != null
+                ? $"Demo construction site: {demoBuilding.Type} at {demoBuilding.Position}"
+                : "No position for a demo construction site found.");
+
             int size = map.WidthHeight;
             cameraOffset = new Vector2(-(size - 1) * 4f, -(size - 1) * 4.5f);
 

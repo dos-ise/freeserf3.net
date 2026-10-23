@@ -250,6 +250,34 @@ public class GameTests : DataTestBase
         Assert.AreEqual(8, game.GetPlayer(0)!.Inventory.Get(Material.Plank));
     }
 
+    [TestMethod]
+    public void PlaceDemoBuildingCreatesConstructionSite()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 8, PosY = 8 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var building = game.PlaceDemoBuilding(BuildingType.Sawmill);
+
+        Assert.IsNotNull(building);
+        Assert.AreEqual(BuildingState.ConstructionSite, building!.State);
+        // The flag is placed on a walkable cell outside the footprint.
+        Assert.IsNotNull(building.Flag);
+        Assert.IsTrue(game.IsWalkable(map, building.Flag!.Position));
+        // The site is away from the stock flag footprint.
+        Assert.IsFalse(game.IsBuildingAt(game.Networks[0].StockFlag!.Position));
+    }
+
+    [TestMethod]
+    public void PlaceDemoBuildingReturnsNullWithoutPlayer()
+    {
+        var game = new Game(new Map(8), 42);
+        Assert.IsNull(game.PlaceDemoBuilding(BuildingType.Sawmill));
+    }
+
     /// <summary>Sets all cells of the map to grass so roads can be built.</summary>
     static void SetGrass(Map map)
     {
