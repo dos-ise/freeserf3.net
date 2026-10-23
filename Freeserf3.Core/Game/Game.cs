@@ -168,7 +168,7 @@ public sealed class Game
         if (playerIndex >= 0 && playerIndex < Networks.Count)
         {
             var network = Networks[playerIndex];
-            var flag = network.AddFlag(position, playerIndex);
+            var flag = network.AddFlag(FindFlagPosition(position), playerIndex);
             building.Flag = flag;
 
             if (network.StockFlag != null)
@@ -182,10 +182,37 @@ public sealed class Game
         return building;
     }
 
-    /// <summary>Whether a carrier can walk on the given cell (not water).</summary>
+    /// <summary>
+    /// Finds a walkable cell for the building's flag (its entrance). The
+    /// flag is placed on the first walkable cell just outside the building's
+    /// footprint so the road can connect even though the building blocks
+    /// movement.
+    /// </summary>
+    Position FindFlagPosition(Position building)
+    {
+        for (int dx = -2; dx <= 2; dx++)
+        {
+            for (int dy = -2; dy <= 2; dy++)
+            {
+                if (Math.Max(Math.Abs(dx), Math.Abs(dy)) < 2)
+                    continue; // inside the 3x3 footprint
+
+                var pos = new Position(building.X + dx, building.Y + dy);
+                if (Map.IsInBounds(pos) && IsWalkable(Map, pos))
+                    return pos;
+            }
+        }
+
+        return building;
+    }
+
+    /// <summary>Whether a carrier can walk on the given cell (not water, not a building).</summary>
     public bool IsWalkable(Map map, Position pos)
     {
         if (!map.IsInBounds(pos))
+            return false;
+
+        if (IsBuildingAt(pos))
             return false;
 
         var landscape = LandscapeMapping.FromMapValue(map.GetCell(pos).Landscape);
@@ -194,6 +221,35 @@ public sealed class Game
             or LandscapeType.Water7 or LandscapeType.Water8
             or LandscapeType.River1 or LandscapeType.River2 or LandscapeType.River3
             or LandscapeType.River4);
+    }
+
+    /// <summary>
+    /// Whether the cell is occupied by a building footprint. Buildings
+    /// block movement so carriers and settlers walk around them.
+    /// </summary>
+    public bool IsBuildingAt(Position pos)
+    {
+        foreach (var building in Buildings)
+        {
+            if (building.State == BuildingState.Destroyed)
+                continue;
+            if (BuildingFootprintContains(building.Position, pos))
+                return true;
+        }
+
+        foreach (var building in Map.Buildings)
+        {
+            if (BuildingFootprintContains(new Position(building.PosX, building.PosY), pos))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether the cell lies within a building's 3x3 footprint.</summary>
+    static bool BuildingFootprintContains(Position building, Position pos)
+    {
+        return Math.Abs(pos.X - building.X) <= 1 && Math.Abs(pos.Y - building.Y) <= 1;
     }
 
     /// <summary>All carriers of all players (for rendering).</summary>
