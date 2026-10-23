@@ -48,6 +48,12 @@ public sealed class Flag
         return Queue.Count > 0 ? Queue.Dequeue() : null;
     }
 
+    /// <summary>Returns the next good in the queue without removing it, or null if empty.</summary>
+    public Material? Peek()
+    {
+        return Queue.Count > 0 ? Queue.Peek() : null;
+    }
+
     /// <summary>Whether the queue holds the given material.</summary>
     public bool Contains(Material material)
     {

@@ -44,6 +44,16 @@ public enum CollectorState
     Pausing
 }
 
+/// <summary>The states of a building builder.</summary>
+public enum BuilderState
+{
+    /// <summary>Walking to the construction site.</summary>
+    WalkingToSite,
+
+    /// <summary>At the construction site, building.</summary>
+    Building
+}
+
 /// <summary>
 /// A settler on the map. Carries goods, walks along paths and works in
 /// buildings.
@@ -67,6 +77,15 @@ public sealed class Serf : Movable
 
     /// <summary>The resource stack the collector is heading to.</summary>
     public ResourceStack? CollectorTarget { get; set; }
+
+    /// <summary>Builder state (only used by builders).</summary>
+    public BuilderState BuilderState { get; set; } = BuilderState.WalkingToSite;
+
+    /// <summary>The construction site the builder is working on.</summary>
+    public Building? ConstructionSite { get; set; }
+
+    /// <summary>Ticks spent on the current build action.</summary>
+    public int BuildTicks { get; set; }
 
     /// <summary>The good currently carried, or null.</summary>
     public Material? CarriedGood { get; set; }
