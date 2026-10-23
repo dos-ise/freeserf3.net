@@ -221,6 +221,15 @@ public sealed class ControlPanel : IDisposable
     /// <summary>Raised when the Cancel button of the in-game menu is clicked.</summary>
     public event Action? CancelRequested;
 
+    /// <summary>Raised when the game speed should be increased.</summary>
+    public event Action? SpeedUpRequested;
+
+    /// <summary>Raised when the game speed should be decreased.</summary>
+    public event Action? SpeedDownRequested;
+
+    /// <summary>The current game speed (1..5), shown in the menu.</summary>
+    public int GameSpeed { get; set; } = 1;
+
     public ControlPanel(GL gl)
     {
         this.gl = gl;
@@ -531,19 +540,30 @@ public sealed class ControlPanel : IDisposable
         float contentW = ContentWidth;
         float contentH = ContentHeight;
 
-        AddMenuButton("PAUSE", contentX, contentY, contentW, contentH, 0.90f, 1.00f, isPaused, () => PauseRequested?.Invoke());
-        AddMenuButton("MUSIC", contentX, contentY, contentW, contentH, 0.75f, 0.85f, false, () => MusicRequested?.Invoke());
+        // Speed control and pause in the top row (settlers-remake gamePanel
+        // layout): speed down, pause, speed label, speed up.
+        AddMenuButton("PAUSE", contentX, contentY, contentW, contentH, 0.90f, 1.00f, isPaused, () => PauseRequested?.Invoke(), 0.25f, 0.60f);
+        AddMenuButton("MUSIC", contentX, contentY, contentW, contentH, 0.75f, 0.85f, false, () => MusicRequested?.Invoke(), 0.25f, 0.90f);
         AddMenuButton("SAVE", contentX, contentY, contentW, contentH, 0.34f, 0.44f, false, () => SaveRequested?.Invoke());
         AddMenuButton("EXIT", contentX, contentY, contentW, contentH, 0.22f, 0.32f, false, () => ExitRequested?.Invoke());
         AddMenuButton("CANCEL", contentX, contentY, contentW, contentH, 0.10f, 0.20f, false, () => CancelRequested?.Invoke());
+
+        // Speed arrows and label in the top row.
+        AddMenuButton("<", contentX, contentY, contentW, contentH, 0.90f, 1.00f, false, () => SpeedDownRequested?.Invoke(), 0.10f, 0.25f);
+        AddMenuButton(">", contentX, contentY, contentW, contentH, 0.90f, 1.00f, false, () => SpeedUpRequested?.Invoke(), 0.90f, 1.00f);
+        float labelX = contentX + contentW * 0.60f;
+        float labelY = contentY + contentH * (1f - 1.00f);
+        float labelW = contentW * 0.30f;
+        float labelH = contentH * 0.10f;
+        DrawLabelCentered($"{GameSpeed}x", labelX, labelY, labelW, labelH);
     }
 
-    void AddMenuButton(string label, float contentX, float contentY, float contentW, float contentH, float bottom, float top, bool active, Action action)
+    void AddMenuButton(string label, float contentX, float contentY, float contentW, float contentH, float bottom, float top, bool active, Action action, float left = 0.1f, float right = 0.9f)
     {
         // The reference uses bottom-up relative coordinates within the pane.
-        float x = contentX + contentW * 0.1f;
+        float x = contentX + contentW * left;
         float y = contentY + contentH * (1f - top);
-        float w = contentW * 0.8f;
+        float w = contentW * (right - left);
         float h = contentH * (top - bottom);
 
         AddSprite(labeledButton[active ? 1 : 0], x, y, w, h);

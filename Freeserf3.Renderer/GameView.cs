@@ -83,6 +83,9 @@ public sealed class GameView : IDisposable
     /// <summary>Whether the simulation is paused (in-game menu).</summary>
     public bool IsPaused { get; private set; }
 
+    /// <summary>Game speed multiplier (1..5), like settlers-remake.</summary>
+    public int GameSpeed { get; private set; } = 1;
+
     /// <summary>Raised when the player chooses to exit the game.</summary>
     public event Action? ExitRequested;
 
@@ -157,6 +160,8 @@ public sealed class GameView : IDisposable
         controlPanel.SaveRequested += () => log("Save not implemented yet.");
         controlPanel.ExitRequested += OnMenuExitRequested;
         controlPanel.CancelRequested += OnCancelRequested;
+        controlPanel.SpeedUpRequested += OnSpeedUpRequested;
+        controlPanel.SpeedDownRequested += OnSpeedDownRequested;
 
         // Start a new round: players, starting resources and population.
         game = new Game(gameMap, 42);
@@ -167,6 +172,7 @@ public sealed class GameView : IDisposable
         // The control panel shows the human player's data.
         controlPanel.Player = game.GetPlayer(0);
         controlPanel.Game = game;
+        controlPanel.GameSpeed = GameSpeed;
 
         // Demo: place the production chain (lumberjack, stonecutter,
         // sawmill) so the building and resource features are visible.
@@ -214,10 +220,11 @@ public sealed class GameView : IDisposable
         State.Gl.Viewport(0, 0, (uint)screenWidth, (uint)screenHeight);
         State.Gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-        // Advance the simulation (once per frame), unless paused.
+        // Advance the simulation (once per frame per speed step), unless paused.
         if (!IsPaused)
         {
-            game?.TickOnce();
+            for (int i = 0; i < GameSpeed; i++)
+                game?.TickOnce();
             if (++minimapUpdateCounter >= 30)
             {
                 minimapUpdateCounter = 0;
@@ -424,6 +431,28 @@ public sealed class GameView : IDisposable
     {
         log("Exit requested");
         ExitRequested?.Invoke();
+    }
+
+    void OnSpeedUpRequested()
+    {
+        if (GameSpeed < 5)
+        {
+            GameSpeed++;
+            if (controlPanel != null)
+                controlPanel.GameSpeed = GameSpeed;
+            log($"Game speed: {GameSpeed}x");
+        }
+    }
+
+    void OnSpeedDownRequested()
+    {
+        if (GameSpeed > 1)
+        {
+            GameSpeed--;
+            if (controlPanel != null)
+                controlPanel.GameSpeed = GameSpeed;
+            log($"Game speed: {GameSpeed}x");
+        }
     }
 
     /// <summary>Closes the in-game menu (e.g. via the Escape key).</summary>
