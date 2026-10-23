@@ -17,6 +17,7 @@ using Android.Util;
 using Android.Views;
 using Freeserf3.Data;
 using Freeserf3.Renderer;
+using Freeserf3.Simulation;
 using Silk.NET.Input.Sdl;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
@@ -34,6 +35,9 @@ public class MainActivity : SilkActivity
 
     static IView? view;
     static TerrainRenderer? terrain;
+    static GameObjectRenderer? gameObjects;
+    static Minimap? minimap;
+    static Map? gameMap;
     static GL? gl;
     static Vector2 cameraOffset;
     static float zoom = 1.0f;
@@ -146,7 +150,10 @@ public class MainActivity : SilkActivity
             map.LoadMapResources();
             map.ReadBasicMapInformation();
             map.ReadMapData();
-            Log.Debug(Tag, $"Map: {map.WidthHeight}x{map.WidthHeight}");
+            map.ReadBuildings();
+            map.ReadSettlers();
+            map.ReadStacks();
+            Log.Debug(Tag, $"Map: {map.WidthHeight}x{map.WidthHeight}, buildings={map.Buildings.Count}, settlers={map.Settlers.Count}");
 
             var gfx = gameData.LoadGfxFile(LandscapeMapping.LandscapeFile);
             if (gfx == null)
@@ -157,6 +164,22 @@ public class MainActivity : SilkActivity
 
             terrain = new TerrainRenderer(State.Gl);
             terrain.Build(map, gfx);
+
+            // Game objects: buildings (dat 13), settlers (dat 10), roads, flags.
+            var buildingsGfx = gameData.LoadGfxFile(GameObjectRenderer.BuildingsFile);
+            var settlersGfx = gameData.LoadGfxFile(GameObjectRenderer.SettlersFile);
+            if (buildingsGfx != null && settlersGfx != null)
+            {
+                gameObjects = new GameObjectRenderer(State.Gl);
+                gameObjects.Load(buildingsGfx, settlersGfx);
+            }
+            else
+            {
+                Log.Warn(Tag, "Building/settler dat files not found; game objects disabled.");
+            }
+
+            gameMap = Map.FromReader(map);
+            minimap = new Minimap(State.Gl, gameMap);
 
             int size = map.WidthHeight;
             cameraOffset = new Vector2(-(size - 1) * 4f, -(size - 1) * 8f);
@@ -188,9 +211,120 @@ public class MainActivity : SilkActivity
         var viewMatrix = Matrix4x4.CreateTranslation(cameraOffset.X * zoom, cameraOffset.Y * zoom, 0);
         terrain.Draw(viewMatrix * projection, zoom);
 
+        if (gameObjects != null)
+        {
+            gameObjects.Begin();
+            CollectGameObjects();
+            gameObjects.Draw(viewMatrix * projection, zoom);
+        }
+
+        minimap?.Draw(width, height);
+
         var error = gl.GetError();
         if (error != GLEnum.NoError)
             Log.Error(Tag, $"GL error: {error}");
+    }
+
+    /// <summary>Collects the sprites of the game objects for the current frame.</summary>
+    static void CollectGameObjects()
+    {
+        if (gameMap == null || gameObjects == null)
+            return;
+
+        int size = gameMap.Size;
+
+        foreach (var building in gameMap.Buildings)
+        {
+            var type = BuildingTypeFromMap(building.BuildingType);
+            if (type == null)
+                continue;
+
+            int x = building.PosX;
+            int y = building.PosY;
+            if (!gameMap.IsInBounds(x, y))
+                continue;
+
+            int height = gameMap.GetCell(x, y).Height;
+            gameObjects.AddBuilding(type.Value, new Position(x, y), height);
+        }
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                var cell = gameMap.GetCell(x, y);
+                var pos = new Position(x, y);
+
+                if (cell.Road == RoadState.Road)
+                    gameObjects.AddRoad(pos, cell.Height);
+                if (cell.HasFlag)
+                    gameObjects.AddFlag(pos, cell.Height);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Maps a map-file building type byte to a game building type. The map
+    /// file uses the original game order (see settlers-remake
+    /// EOriginalMapBuildingType).
+    /// </summary>
+    static BuildingType? BuildingTypeFromMap(byte buildingType)
+    {
+        return buildingType switch
+        {
+            1 => BuildingType.Stock,
+            2 => BuildingType.Lumberjack,
+            3 => BuildingType.Stonecutter,
+            4 => BuildingType.Sawmill,
+            5 => BuildingType.Forester,
+            6 => BuildingType.LookoutTower,
+            7 => BuildingType.Coalmine,
+            8 => BuildingType.Goldmine,
+            9 => BuildingType.Ironmine,
+            10 => BuildingType.Goldmelt,
+            11 => BuildingType.Ironmelt,
+            12 => BuildingType.Toolsmith,
+            13 => BuildingType.Weaponsmith,
+            14 => BuildingType.Winegrower,
+            15 => BuildingType.Tower,
+            16 => BuildingType.BigTower,
+            17 => BuildingType.Mill,
+            18 => BuildingType.Castle,
+            19 => BuildingType.Barrack,
+            20 => BuildingType.Baker,
+            21 => BuildingType.Slaughterhouse,
+            22 => BuildingType.Distillery,
+            23 => BuildingType.PigFarm,
+            24 => BuildingType.Farm,
+            25 => BuildingType.Fisher,
+            26 => BuildingType.SmallLivinghouse,
+            27 => BuildingType.MediumLivinghouse,
+            28 => BuildingType.BigLivinghouse,
+            29 => BuildingType.Sulfurmine,
+            30 => BuildingType.Waterworks,
+            32 => BuildingType.Dockyard,
+            33 => BuildingType.Harbor,
+            34 => BuildingType.MarketPlace,
+            35 => BuildingType.Hospital,
+            36 => BuildingType.RiceFarm,
+            37 => BuildingType.Gemsmine,
+            38 => BuildingType.Brewery,
+            39 => BuildingType.CharcoalBurner,
+            41 => BuildingType.BigTemple,
+            42 => BuildingType.Temple,
+            43 => BuildingType.BigTemple,
+            44 => BuildingType.Temple,
+            45 => BuildingType.BigTemple,
+            46 => BuildingType.Temple,
+            49 => BuildingType.DonkeyFarm,
+            51 => BuildingType.Beekeeping,
+            52 => BuildingType.MeadBrewery,
+            53 => BuildingType.Laboratory,
+            54 => BuildingType.Temple,
+            55 => BuildingType.BigTemple,
+            56 => BuildingType.Sulfurmine,
+            _ => null
+        };
     }
 
     static void Window_Resize(Vector2D<int> size)
@@ -200,6 +334,10 @@ public class MainActivity : SilkActivity
 
     static void Window_Closing()
     {
+        minimap?.Dispose();
+        minimap = null;
+        gameObjects?.Dispose();
+        gameObjects = null;
         terrain?.Dispose();
         terrain = null;
     }
