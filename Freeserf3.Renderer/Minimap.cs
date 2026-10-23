@@ -95,16 +95,13 @@ public sealed class Minimap : IDisposable
         };
     }
 
-    /// <summary>Draws the minimap in the top-right corner of the screen.</summary>
-    public void Draw(int screenWidth, int screenHeight)
+    /// <summary>Draws the minimap inside the given screen rectangle.</summary>
+    public void Draw(float x, float y, float width, float height)
     {
-        const float margin = 8f;
-        const float minimapSize = 160f;
-
-        float x0 = screenWidth - margin - minimapSize;
-        float y0 = margin;
-        float x1 = screenWidth - margin;
-        float y1 = margin + minimapSize;
+        float x0 = x;
+        float y0 = y;
+        float x1 = x + width;
+        float y1 = y + height;
 
         float[] vertices =
         {
@@ -121,7 +118,7 @@ public sealed class Minimap : IDisposable
         gl.BufferData(BufferTargetARB.ArrayBuffer, vertices, BufferUsageARB.DynamicDraw);
 
         shader.Use();
-        shader.SetUniformMatrix4("uProjection", Matrix4x4.CreateOrthographicOffCenter(0, screenWidth, screenHeight, 0, -1, 1));
+        shader.SetUniformMatrix4("uProjection", Matrix4x4.CreateOrthographicOffCenter(0, x1, y1, 0, -1, 1));
 
         texture.Bind(0);
         shader.SetUniform1("uTexture", 0);

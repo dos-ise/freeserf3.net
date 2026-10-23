@@ -43,6 +43,7 @@ public sealed class MainWindow : IDisposable
     GameObjectRenderer? gameObjects;
     Minimap? minimap;
     HudRenderer? hud;
+    ControlPanel? controlPanel;
     MapFileReader? map;
     Freeserf3.Simulation.Map? gameMap;
     Freeserf3.Simulation.Game? game;
@@ -150,6 +151,12 @@ public sealed class MainWindow : IDisposable
         gameMap = Freeserf3.Simulation.Map.FromReader(map);
         hud = new HudRenderer(State.Gl);
 
+        // Left-side control panel (building selection, system button).
+        controlPanel = new ControlPanel(State.Gl);
+        controlPanel.Load(gameData);
+        controlPanel.BuildingSelected += OnBuildingSelected;
+        controlPanel.SystemButtonClicked += OnSystemButtonClicked;
+
         // Start a new round: players, starting resources and population.
         game = new Freeserf3.Simulation.Game(gameMap, 42);
         game.StartGame();
@@ -194,7 +201,17 @@ public sealed class MainWindow : IDisposable
             }
         }
 
-        minimap?.Draw(window.Size.X, window.Size.Y);
+        // Minimap on top of the control panel, then the panel itself.
+        if (controlPanel != null)
+        {
+            var (mx, my, mw, mh) = controlPanel.GetMiniMapRect(window.Size.X, window.Size.Y);
+            minimap?.Draw(mx, my, mw, mh);
+            controlPanel.Draw(window.Size.X, window.Size.Y);
+        }
+        else
+        {
+            minimap?.Draw(0f, 0f, 160f, 160f);
+        }
         hud?.Draw(window.Size.X, window.Size.Y, BuildHudLines());
     }
 
@@ -472,6 +489,10 @@ public sealed class MainWindow : IDisposable
     {
         if (button == MouseButton.Left || button == MouseButton.Right)
         {
+            // Clicks on the control panel are handled by the panel, not the map.
+            if (button == MouseButton.Left && IsInPanel(new Vector2(mouse.Position.X, mouse.Position.Y)))
+                return;
+
             dragging = true;
             lastMouse = new Vector2(mouse.Position.X, mouse.Position.Y);
         }
@@ -488,11 +509,26 @@ public sealed class MainWindow : IDisposable
             if (Vector2.Distance(position, lastMouse) < 4f)
             {
                 if (button == MouseButton.Left)
+                {
+                    if (controlPanel?.HandleClick(position) == true)
+                        return;
                     HandleLeftClick(position);
+                }
                 else
+                {
                     HandleRightClick();
+                }
             }
         }
+    }
+
+    /// <summary>Whether the position lies on the left-side control panel.</summary>
+    bool IsInPanel(Vector2 position)
+    {
+        if (controlPanel == null)
+            return false;
+        var (x, y, width, height) = controlPanel.GetMiniMapRect(window.Size.X, window.Size.Y);
+        return position.X >= x && position.X <= x + width && position.Y >= y && position.Y <= y + height;
     }
 
     void OnMouseMove(IMouse mouse, Vector2 position)
@@ -554,8 +590,23 @@ public sealed class MainWindow : IDisposable
         if (mode != InteractionMode.Select)
         {
             mode = InteractionMode.Select;
+            controlPanel?.ClearSelection();
             Console.WriteLine("Mode: select");
         }
+    }
+
+    /// <summary>Selects a building in the control panel and enters build mode.</summary>
+    void OnBuildingSelected(BuildingType type)
+    {
+        buildType = type;
+        mode = InteractionMode.Build;
+        Console.WriteLine($"Mode: build ({buildType})");
+    }
+
+    /// <summary>The system (computer) button opens the in-game menu.</summary>
+    void OnSystemButtonClicked()
+    {
+        Console.WriteLine("System button clicked (in-game menu)");
     }
 
     /// <summary>Selects the building at the given position, if any.</summary>
@@ -639,6 +690,7 @@ public sealed class MainWindow : IDisposable
                 if (mode != InteractionMode.Select)
                 {
                     mode = InteractionMode.Select;
+                    controlPanel?.ClearSelection();
                     Console.WriteLine("Mode: select");
                 }
                 else
@@ -678,6 +730,8 @@ public sealed class MainWindow : IDisposable
         gameObjects = null;
         minimap?.Dispose();
         minimap = null;
+        controlPanel?.Dispose();
+        controlPanel = null;
     }
 
     public void Dispose()
