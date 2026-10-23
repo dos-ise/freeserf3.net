@@ -107,6 +107,29 @@ public sealed class GameObjectRenderer : IDisposable
         [Material.Honey] = 89
     };
 
+    /// <summary>
+    /// Carrier sprite sequence per material in the settler file (dat 10).
+    /// Sequence 0 is the empty carrier, sequences 1-12 show the carrier
+    /// carrying a good on his back. The mapping is a best guess from the
+    /// sprite colors and the original material order; refine by checking
+    /// the game on the device.
+    /// </summary>
+    public static readonly Dictionary<Material, int> CarrierSequences = new()
+    {
+        [Material.Plank] = 1,
+        [Material.Stone] = 2,
+        [Material.Pig] = 3,
+        [Material.Trunk] = 4,
+        [Material.Bread] = 5,
+        [Material.Coal] = 6,
+        [Material.GoldOre] = 7,
+        [Material.IronOre] = 8,
+        [Material.Fish] = 9,
+        [Material.Meat] = 10,
+        [Material.Crop] = 11,
+        [Material.Water] = 12
+    };
+
     /// <summary>Building sprite sequence per building type (from the building XMLs).</summary>
     public static readonly Dictionary<BuildingType, int> BuildingSequences = new()
     {
@@ -457,6 +480,20 @@ public sealed class GameObjectRenderer : IDisposable
     public void AddMovable(Position pos, int height, int playerColor, int frame = 0)
     {
         if (!settlerImages.TryGetValue((playerColor, 0), out var frames) || frames.Length == 0)
+            return;
+
+        AddSprite(frames[frame % frames.Length], pos, height, 0.5f);
+    }
+
+    /// <summary>
+    /// Adds a carrier sprite. When the carrier carries a good with a
+    /// dedicated carrying animation (sequence 1-12, good on the back) that
+    /// sequence is used, otherwise the plain walking animation (sequence 0).
+    /// </summary>
+    public void AddCarrier(Position pos, int height, int playerColor, int frame, Material? carried)
+    {
+        int sequence = carried.HasValue && CarrierSequences.TryGetValue(carried.Value, out int s) ? s : 0;
+        if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
             return;
 
         AddSprite(frames[frame % frames.Length], pos, height, 0.5f);

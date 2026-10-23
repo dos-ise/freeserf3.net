@@ -266,7 +266,10 @@ public sealed class MainWindow : IDisposable
             {
                 if (!gameMap.IsInBounds(settler.Position))
                     continue;
-                gameObjects.AddMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame);
+                if (settler.Type == SerfType.Collector)
+                    gameObjects.AddCarrier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.CarriedGood);
+                else
+                    gameObjects.AddMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame);
             }
         }
         else
@@ -287,7 +290,9 @@ public sealed class MainWindow : IDisposable
             {
                 if (!gameMap.IsInBounds(carrier.Position))
                     continue;
-                gameObjects.AddMovable(carrier.Position, gameMap.GetCell(carrier.Position).Height, carrier.Player, frame);
+                gameObjects.AddCarrier(carrier.Position, gameMap.GetCell(carrier.Position).Height, carrier.Player, frame, carrier.CarriedGood);
+                if (carrier.IsCarrying && carrier.CarriedGood.HasValue && !GameObjectRenderer.CarrierSequences.ContainsKey(carrier.CarriedGood.Value))
+                    gameObjects.AddCarriedGood(carrier.Position, gameMap.GetCell(carrier.Position).Height, carrier.CarriedGood.Value);
             }
         }
 
@@ -302,14 +307,16 @@ public sealed class MainWindow : IDisposable
             }
         }
 
-        // Carried goods above the collectors.
+        // Carried goods above the collectors (only for goods without a
+        // dedicated carrying animation).
         if (game != null)
         {
             foreach (var collector in game.Collectors)
             {
                 if (!collector.IsCarrying || !gameMap.IsInBounds(collector.Position))
                     continue;
-                gameObjects.AddCarriedGood(collector.Position, gameMap.GetCell(collector.Position).Height, collector.CarriedGood!.Value);
+                if (!GameObjectRenderer.CarrierSequences.ContainsKey(collector.CarriedGood!.Value))
+                    gameObjects.AddCarriedGood(collector.Position, gameMap.GetCell(collector.Position).Height, collector.CarriedGood.Value);
             }
         }
 
