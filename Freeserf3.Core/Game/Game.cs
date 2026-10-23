@@ -53,6 +53,9 @@ public sealed class Game
     /// <summary>The settlers that collect resources from the stacks.</summary>
     public List<Serf> Collectors { get; } = new();
 
+    /// <summary>The settlers that build the construction sites.</summary>
+    public List<Serf> Builders { get; } = new();
+
     /// <summary>The transport network of each player (index = player index).</summary>
     public List<TransportNetwork> Networks { get; } = new();
 
@@ -93,6 +96,7 @@ public sealed class Game
         // Create walking settlers from the map's settlers.
         Settlers.Clear();
         Collectors.Clear();
+        Builders.Clear();
         foreach (var mapSettler in Map.Settlers)
         {
             var serf = new Serf(mapSettler.Party, new Position(mapSettler.PosX, mapSettler.PosY), SerfType.Worker)
@@ -153,7 +157,8 @@ public sealed class Game
     /// <summary>
     /// Places a new building for the given player. The building starts as a
     /// construction site and is built over time. Its flag is connected to
-    /// the player's stock flag so produced goods can be carried away.
+    /// the player's stock flag so produced goods can be carried away. A
+    /// free settler is assigned as builder right away if one is available.
     /// </summary>
     public Building PlaceBuilding(BuildingType type, Position position, int playerIndex)
     {
@@ -169,6 +174,10 @@ public sealed class Game
             if (network.StockFlag != null)
                 network.Connect(flag, network.StockFlag, playerIndex, IsWalkable);
         }
+
+        var player = GetPlayer(playerIndex);
+        if (player != null && player.FreeSettlers > 0)
+            AssignBuilder(building, player);
 
         return building;
     }
@@ -402,12 +411,101 @@ public sealed class Game
         }
     }
 
+    /// <summary>Ticks between two build actions of a builder.</summary>
+    const int BuildActionTicks = 20;
+
+    /// <summary>
+    /// Assigns a free settler as builder of the given construction site.
+    /// The builder appears at the site and starts building.
+    /// </summary>
+    void AssignBuilder(Building building, Player player)
+    {
+        player.FreeSettlers--;
+        var builder = new Serf(player.Index, building.Position, SerfType.Builder)
+        {
+            ConstructionSite = building,
+            BuilderState = BuilderState.Building,
+            MoveInterval = 4
+        };
+        Settlers.Add(builder);
+        Builders.Add(builder);
+    }
+
+    /// <summary>
+    /// Advances the builders: each builder consumes one construction
+    /// material from its site every few ticks. A finished or destroyed site
+    /// releases the builder back to the free settlers.
+    /// </summary>
+    void TickBuilders()
+    {
+        for (int i = Builders.Count - 1; i >= 0; i--)
+        {
+            var builder = Builders[i];
+            var site = builder.ConstructionSite;
+
+            if (site == null || site.State != BuildingState.ConstructionSite)
+            {
+                ReleaseBuilder(builder);
+                continue;
+            }
+
+            switch (builder.BuilderState)
+            {
+                case BuilderState.WalkingToSite:
+                    builder.Tick();
+                    if (builder.State == MovableState.Idle)
+                        builder.BuilderState = BuilderState.Building;
+                    break;
+
+                case BuilderState.Building:
+                    builder.BuildTicks++;
+                    if (builder.BuildTicks >= BuildActionTicks)
+                    {
+                        builder.BuildTicks = 0;
+                        site.ConsumeConstructionMaterial();
+                    }
+                    break;
+            }
+        }
+    }
+
+    /// <summary>Releases a builder: it becomes a free settler again.</summary>
+    void ReleaseBuilder(Serf builder)
+    {
+        var player = GetPlayer(builder.Player);
+        if (player != null)
+            player.FreeSettlers++;
+        builder.ConstructionSite = null;
+        builder.Type = SerfType.Worker;
+        Builders.Remove(builder);
+    }
+
+    /// <summary>
+    /// Whether the player still needs the given material for one of its
+    /// construction sites. Such materials stay at the stock flag so the
+    /// carriers can deliver them.
+    /// </summary>
+    bool IsConstructionMaterialNeeded(Player player, Material material)
+    {
+        foreach (var building in Buildings)
+        {
+            if (building.Player != player.Index)
+                continue;
+            if (building.State != BuildingState.ConstructionSite)
+                continue;
+            if (building.DeliveredMaterials.Get(material) < building.Definition.GetConstructionCost(material))
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// Advances the game by one tick. The clock is incremented and all
-    /// buildings are simulated (construction, worker assignment and
-    /// production); produced goods are queued at the building flags and
-    /// carried to the player's stock by the carriers. Living houses grow
-    /// the population.
+    /// buildings are simulated (worker assignment and production); produced
+    /// goods are queued at the building flags and carried to the player's
+    /// stock by the carriers. Construction sites receive their materials
+    /// through the transport network and are built by their builders.
+    /// Living houses grow the population.
     /// </summary>
     public void TickOnce()
     {
@@ -431,7 +529,18 @@ public sealed class Game
                 }
             }
 
-            building.Tick(player);
+            // Leftover construction materials of finished buildings go back
+            // to the player's stock.
+            if (building.State != BuildingState.ConstructionSite && !building.DeliveredMaterials.IsEmpty && player != null)
+            {
+                foreach (var (material, count) in building.DeliveredMaterials.NonEmpty())
+                {
+                    player.Inventory.Add(material, count);
+                    building.DeliveredMaterials.Remove(material, count);
+                }
+            }
+
+            building.Tick();
 
             // A finished building gets a worker from the free settlers.
             if (building.State == BuildingState.Active
@@ -457,7 +566,42 @@ public sealed class Game
             }
         }
 
+        // Construction sites get a builder from the free settlers.
+        foreach (var building in Buildings)
+        {
+            if (building.State != BuildingState.ConstructionSite)
+                continue;
+            if (Builders.Any(b => b.ConstructionSite == building))
+                continue;
+
+            var player = GetPlayer(building.Player);
+            if (player == null || player.FreeSettlers <= 0)
+                continue;
+
+            AssignBuilder(building, player);
+        }
+
+        // Construction materials that arrived at the building flags are
+        // moved into the delivered materials before the carriers can take
+        // them back to the stock.
+        foreach (var building in Buildings)
+        {
+            if (building.State != BuildingState.ConstructionSite || building.Flag == null)
+                continue;
+
+            foreach (var (material, count) in building.Definition.ConstructionCosts)
+            {
+                while (building.DeliveredMaterials.Get(material) < count && building.Flag.Contains(material))
+                {
+                    building.Flag.TakeGood(material);
+                    building.DeliveredMaterials.Add(material);
+                }
+            }
+        }
+
         // Goods that arrived at the stock flags go into the player's stock.
+        // Materials still needed by a construction site stay at the flag so
+        // the carriers can deliver them.
         for (int i = 0; i < Networks.Count; i++)
         {
             var player = GetPlayer(i);
@@ -467,9 +611,42 @@ public sealed class Game
 
             while (stock.Count > 0)
             {
-                var good = stock.TakeGood();
-                if (good.HasValue)
-                    player.Inventory.Add(good.Value);
+                var good = stock.Peek();
+                if (good.HasValue && IsConstructionMaterialNeeded(player, good.Value))
+                    break;
+
+                var taken = stock.TakeGood();
+                if (taken.HasValue)
+                    player.Inventory.Add(taken.Value);
+            }
+        }
+
+        // Construction materials are sent from the player's stock to the
+        // building flags through the transport network (one per site and
+        // tick); the carriers bring them to the construction sites.
+        for (int i = 0; i < Networks.Count; i++)
+        {
+            var player = GetPlayer(i);
+            var stock = Networks[i].StockFlag;
+            if (player == null || stock == null)
+                continue;
+
+            foreach (var building in Buildings)
+            {
+                if (building.Player != i || building.State != BuildingState.ConstructionSite)
+                    continue;
+
+                foreach (var (material, count) in building.Definition.ConstructionCosts)
+                {
+                    if (building.DeliveredMaterials.Get(material) >= count)
+                        continue;
+                    if (player.Inventory.Get(material) <= 0)
+                        continue;
+
+                    player.Inventory.Remove(material);
+                    stock.AddGood(material);
+                    break;
+                }
             }
         }
 
@@ -478,10 +655,11 @@ public sealed class Game
             network.Tick();
 
         // Settlers wander around the map; after a short pause they pick a
-        // new walk target.
+        // new walk target. Collectors and builders are driven by their own
+        // state machines.
         foreach (var settler in Settlers)
         {
-            if (settler.Type == SerfType.Collector)
+            if (settler.Type is SerfType.Collector or SerfType.Builder)
                 continue;
             settler.Tick();
             if (settler.State == MovableState.Idle)
@@ -498,6 +676,9 @@ public sealed class Game
         // Resource collectors walk to stacks, pick up goods and carry them
         // to the player's stock.
         TickCollectors();
+
+        // Builders build the construction sites.
+        TickBuilders();
 
         // Living houses grow the population over time.
         if (Tick % 600 == 0)

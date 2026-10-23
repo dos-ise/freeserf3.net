@@ -117,6 +117,45 @@ public class BuildingTests
     }
 
     [TestMethod]
+    public void ConsumeConstructionMaterialAdvancesProgress()
+    {
+        // Lumberjack: 2 stone + 2 plank = 4 materials, 25% each.
+        var building = new Building(BuildingType.Lumberjack, new Position(5, 5), 0);
+        building.DeliveredMaterials.Add(Material.Stone, 2);
+        building.DeliveredMaterials.Add(Material.Plank, 2);
+
+        for (int i = 0; i < 3; i++)
+            Assert.IsTrue(building.ConsumeConstructionMaterial());
+
+        Assert.AreEqual(BuildingState.ConstructionSite, building.State);
+        Assert.AreEqual(75, building.ConstructionProgress);
+
+        Assert.IsTrue(building.ConsumeConstructionMaterial());
+        Assert.AreEqual(BuildingState.Active, building.State);
+        Assert.AreEqual(100, building.ConstructionProgress);
+    }
+
+    [TestMethod]
+    public void ConsumeConstructionMaterialReturnsFalseWhenEmpty()
+    {
+        var building = new Building(BuildingType.Lumberjack, new Position(5, 5), 0);
+
+        Assert.IsFalse(building.ConsumeConstructionMaterial());
+        Assert.AreEqual(BuildingState.ConstructionSite, building.State);
+        Assert.AreEqual(0, building.ConstructionProgress);
+    }
+
+    [TestMethod]
+    public void ConsumeConstructionMaterialDoesNothingWhenActive()
+    {
+        var building = new Building(BuildingType.Lumberjack, new Position(5, 5), 0);
+        building.AddConstructionProgress(100);
+
+        Assert.IsFalse(building.ConsumeConstructionMaterial());
+        Assert.AreEqual(BuildingState.Active, building.State);
+    }
+
+    [TestMethod]
     public void ProductionRequiresWorkerAndInputs()
     {
         var building = new Building(BuildingType.Sawmill, new Position(5, 5), 0);

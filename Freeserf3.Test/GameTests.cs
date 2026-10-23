@@ -155,21 +155,48 @@ public class GameTests : DataTestBase
     {
         var map = new Map(8);
         map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
         var game = new Game(map, 42);
         game.StartGame();
 
         // Lumberjack costs 2 stone + 2 plank.
-        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(1, 1), 0);
+        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
         Assert.AreEqual(BuildingState.ConstructionSite, building.State);
 
-        // Each tick delivers one material from the player's stock.
-        for (int i = 0; i < 4; i++)
+        // A builder is assigned from the free settlers.
+        Assert.AreEqual(1, game.Builders.Count);
+        Assert.AreEqual(SerfType.Builder, game.Builders[0].Type);
+
+        // The materials are delivered by the carrier and built by the
+        // builder over time.
+        for (int i = 0; i < 500; i++)
             game.TickOnce();
 
         Assert.AreEqual(BuildingState.Active, building.State);
         Assert.AreEqual(100, building.ConstructionProgress);
+        Assert.AreEqual(0, game.Builders.Count);
+        // 2 stone + 2 plank consumed from the starting stock (10 each).
         Assert.AreEqual(8, game.GetPlayer(0)!.Inventory.Get(Material.Stone));
         Assert.AreEqual(8, game.GetPlayer(0)!.Inventory.Get(Material.Plank));
+    }
+
+    [TestMethod]
+    public void ConstructionWaitsForFreeSettler()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // No free settlers: no builder is assigned and nothing is built.
+        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+        for (int i = 0; i < 100; i++)
+            game.TickOnce();
+
+        Assert.AreEqual(BuildingState.ConstructionSite, building.State);
+        Assert.AreEqual(0, game.Builders.Count);
     }
 
     [TestMethod]
@@ -178,11 +205,12 @@ public class GameTests : DataTestBase
         var map = new Map(8);
         map.Players.Add(new MapPlayerInfo { Name = "P0" });
         map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
         var game = new Game(map, 42);
         game.StartGame();
 
-        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(1, 1), 0);
-        for (int i = 0; i < 4; i++)
+        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
             game.TickOnce();
 
         Assert.AreEqual(BuildingState.Active, building.State);
@@ -202,7 +230,7 @@ public class GameTests : DataTestBase
 
         // Sawmill: 3 plank + 4 stone, trunk -> plank.
         var building = game.PlaceBuilding(BuildingType.Sawmill, new Position(4, 4), 0);
-        for (int i = 0; i < 7; i++)
+        for (int i = 0; i < 1000; i++)
             game.TickOnce();
 
         Assert.AreEqual(BuildingState.Active, building.State);
@@ -213,7 +241,7 @@ public class GameTests : DataTestBase
         int productionTime = building.Definition.ProductionTime;
         // Production plus time for the carrier to deliver the plank to the
         // player's stock.
-        for (int i = 0; i < productionTime + 20; i++)
+        for (int i = 0; i < productionTime + 100; i++)
             game.TickOnce();
 
         Assert.AreEqual(0, building.Output.Get(Material.Plank));
@@ -443,12 +471,13 @@ public class GameTests : DataTestBase
     {
         var map = new Map(8);
         map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
         var game = new Game(map, 42);
         game.StartGame();
 
-        var house = game.PlaceBuilding(BuildingType.SmallLivinghouse, new Position(1, 1), 0);
-        int cost = house.Definition.TotalConstructionCost;
-        for (int i = 0; i < cost; i++)
+        var house = game.PlaceBuilding(BuildingType.SmallLivinghouse, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
             game.TickOnce();
 
         Assert.AreEqual(BuildingState.Active, house.State);
@@ -467,6 +496,8 @@ public class GameTests : DataTestBase
     {
         var map = new Map(8);
         map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
         var game = new Game(map, 42);
         game.StartGame();
         game.TargetPopulation = 5;
@@ -474,9 +505,8 @@ public class GameTests : DataTestBase
         Assert.IsFalse(game.IsWon);
 
         // Build enough living houses to grow the population to the target.
-        var house = game.PlaceBuilding(BuildingType.SmallLivinghouse, new Position(1, 1), 0);
-        int cost = house.Definition.TotalConstructionCost;
-        for (int i = 0; i < cost; i++)
+        var house = game.PlaceBuilding(BuildingType.SmallLivinghouse, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
             game.TickOnce();
 
         for (int i = 0; i < 600 * 5; i++)

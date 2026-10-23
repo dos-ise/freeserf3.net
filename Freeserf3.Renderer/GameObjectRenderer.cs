@@ -183,6 +183,7 @@ public sealed class GameObjectRenderer : IDisposable
     readonly SpriteRenderer sprites;
     readonly TextureAtlas atlas;
     readonly Dictionary<int, SpriteImage> buildingImages = new();
+    readonly Dictionary<int, SpriteImage> constructionImages = new();
     readonly Dictionary<(int Color, int Sequence), SpriteImage[]> settlerImages = new();
     readonly Dictionary<int, SpriteImage[]> treeImages = new();
     readonly Dictionary<int, SpriteImage> borderImages = new();
@@ -220,17 +221,20 @@ public sealed class GameObjectRenderer : IDisposable
     /// </summary>
     public void Load(DatFileReader buildings, DatFileReader settlers, IEnumerable<int> playerColors)
     {
-        // Building sprites.
+        // Building sprites. Image 0 is the finished building, image 1 the
+        // construction site (from the building XMLs: for="FINAL" / for="BUILD").
         foreach (var (type, sequence) in BuildingSequences)
         {
             if (buildingImages.ContainsKey(sequence))
                 continue;
 
-            var image = buildings.GetSettlerSequence(sequence).FirstOrDefault();
-            if (image == null)
+            var frames = buildings.GetSettlerSequence(sequence);
+            if (frames.Length == 0)
                 continue;
 
-            buildingImages[sequence] = AddToAtlas(image);
+            buildingImages[sequence] = AddToAtlas(frames[0]);
+            if (frames.Length > 1)
+                constructionImages[sequence] = AddToAtlas(frames[1]);
         }
 
         // Flag sprites (door).
@@ -468,6 +472,17 @@ public sealed class GameObjectRenderer : IDisposable
         if (!BuildingSequences.TryGetValue(type, out int sequence))
             return;
         if (!buildingImages.TryGetValue(sequence, out var image))
+            return;
+
+        AddSprite(image, pos, height, 0.2f);
+    }
+
+    /// <summary>Adds a construction site sprite at the given grid position.</summary>
+    public void AddConstructionSite(BuildingType type, Position pos, int height)
+    {
+        if (!BuildingSequences.TryGetValue(type, out int sequence))
+            return;
+        if (!constructionImages.TryGetValue(sequence, out var image))
             return;
 
         AddSprite(image, pos, height, 0.2f);

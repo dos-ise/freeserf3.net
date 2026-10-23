@@ -67,6 +67,9 @@ public sealed class Building
     /// <summary>Construction materials already delivered to the site.</summary>
     public Inventory DeliveredMaterials { get; } = new();
 
+    /// <summary>Construction materials already used by the builder.</summary>
+    public Inventory ConsumedMaterials { get; } = new();
+
     /// <summary>
     /// The flag in front of the building. Produced goods are queued here
     /// and carried to the player's stock by a carrier.
@@ -144,18 +147,12 @@ public sealed class Building
     }
 
     /// <summary>
-    /// Advances the building by one tick. Construction sites consume one
-    /// construction material from the player's stock per tick and gain
-    /// progress; active producers consume inputs and produce their output.
+    /// Advances the building by one tick. Active producers consume inputs
+    /// and produce their output. Construction sites are built by their
+    /// builder via <see cref="ConsumeConstructionMaterial"/>.
     /// </summary>
-    public void Tick(Player? player = null)
+    public void Tick()
     {
-        if (State == BuildingState.ConstructionSite)
-        {
-            TickConstruction(player);
-            return;
-        }
-
         if (State != BuildingState.Active)
             return;
 
@@ -178,31 +175,35 @@ public sealed class Building
         }
     }
 
-    // Delivers one construction material from the player's stock and
-    // advances the construction progress. The building becomes active once
-    // all materials are delivered.
-    void TickConstruction(Player? player)
+    /// <summary>
+    /// Consumes one construction material from the delivered materials and
+    /// advances the construction progress. The building becomes active once
+    /// all materials have been used. Returns false if the site is not under
+    /// construction or has no material left.
+    /// </summary>
+    public bool ConsumeConstructionMaterial()
     {
-        if (player == null)
-            return;
+        if (State != BuildingState.ConstructionSite)
+            return false;
 
         foreach (var (material, count) in Definition.ConstructionCosts)
         {
-            int delivered = DeliveredMaterials.Get(material);
-            if (delivered >= count)
+            if (DeliveredMaterials.Get(material) <= 0)
+                continue;
+            if (ConsumedMaterials.Get(material) >= count)
                 continue;
 
-            if (!player.Inventory.Remove(material))
-                continue;
-
-            DeliveredMaterials.Add(material);
-            int total = Definition.TotalConstructionCost;
-            int deliveredTotal = DeliveredMaterials.TotalCount;
-            ConstructionProgress = Math.Min(100, deliveredTotal * 100 / total);
-            if (ConstructionProgress >= 100)
+            DeliveredMaterials.Remove(material);
+            ConsumedMaterials.Add(material);
+            ConstructionProgress = ConsumedMaterials.TotalCount * 100 / Definition.TotalConstructionCost;
+            if (ConsumedMaterials.TotalCount >= Definition.TotalConstructionCost)
+            {
+                ConstructionProgress = 100;
                 State = BuildingState.Active;
-            return;
+            }
+            return true;
         }
+        return false;
     }
 
     void CompleteProduction()

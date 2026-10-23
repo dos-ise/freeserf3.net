@@ -270,7 +270,10 @@ public sealed class MainWindow : IDisposable
                     continue;
                 if (!gameMap.IsInBounds(building.Position))
                     continue;
-                gameObjects.AddBuilding(building.Type, building.Position, gameMap.GetCell(building.Position).Height);
+                if (building.State == BuildingState.ConstructionSite)
+                    gameObjects.AddConstructionSite(building.Type, building.Position, gameMap.GetCell(building.Position).Height);
+                else
+                    gameObjects.AddBuilding(building.Type, building.Position, gameMap.GetCell(building.Position).Height);
             }
         }
 
