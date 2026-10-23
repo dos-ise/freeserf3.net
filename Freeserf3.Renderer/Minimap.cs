@@ -74,6 +74,41 @@ public sealed class Minimap : IDisposable
         return pixels;
     }
 
+    /// <summary>
+    /// Rebuilds the minimap texture with the current game objects: buildings
+    /// in their player color and settlers as white dots. Called periodically
+    /// (not every frame) by the game view.
+    /// </summary>
+    public void Update(Game game)
+    {
+        var pixels = BuildPixels(game.Map);
+
+        foreach (var building in game.Buildings)
+        {
+            if (building.State == BuildingState.Destroyed)
+                continue;
+            SetPixel(pixels, building.Position, size, GameObjectRenderer.PlayerColors[building.Player % GameObjectRenderer.PlayerColors.Length]);
+        }
+
+        foreach (var settler in game.Settlers)
+        {
+            SetPixel(pixels, settler.Position, size, (255, 255, 255));
+        }
+
+        texture.Update(pixels);
+    }
+
+    static void SetPixel(byte[] pixels, Position pos, int size, (byte R, byte G, byte B) color)
+    {
+        if (pos.X < 0 || pos.X >= size || pos.Y < 0 || pos.Y >= size)
+            return;
+        int index = (pos.Y * size + pos.X) * 4;
+        pixels[index] = color.R;
+        pixels[index + 1] = color.G;
+        pixels[index + 2] = color.B;
+        pixels[index + 3] = 255;
+    }
+
     static (byte R, byte G, byte B) GetLandscapeColor(byte landscape)
     {
         var type = LandscapeMapping.FromMapValue(landscape);

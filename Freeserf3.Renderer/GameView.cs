@@ -47,6 +47,7 @@ public sealed class GameView : IDisposable
     TerrainRenderer? terrain;
     GameObjectRenderer? gameObjects;
     Minimap? minimap;
+    int minimapUpdateCounter;
     ControlPanel? controlPanel;
     Map? gameMap;
     Game? game;
@@ -211,7 +212,15 @@ public sealed class GameView : IDisposable
 
         // Advance the simulation (once per frame), unless paused.
         if (!IsPaused)
+        {
             game?.TickOnce();
+            if (++minimapUpdateCounter >= 30)
+            {
+                minimapUpdateCounter = 0;
+                if (game != null)
+                    minimap?.Update(game);
+            }
+        }
 
         var viewProjection = CreateViewProjection(screenWidth, screenHeight);
         terrain.Draw(viewProjection, zoom);
