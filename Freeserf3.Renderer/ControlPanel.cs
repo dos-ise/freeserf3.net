@@ -42,6 +42,12 @@ public sealed class ControlPanel : IDisposable
     /// <summary>Building icons are stored in dat file 14.</summary>
     public const int BuildingIconsFile = 14;
 
+    /// <summary>Material icons live in dat files 3, 14, 24 and 34.</summary>
+    public const int MaterialIconsFile = 3;
+    public const int MaterialIconsFile2 = 14;
+    public const int MaterialIconsFile3 = 24;
+    public const int MaterialIconsFile4 = 34;
+
     // GUI image indices in the buttons file (from settlers-remake MainPanel).
     const int TabBuildInactive = 51, TabBuildActive = 60;
     const int TabGoodsInactive = 54, TabGoodsActive = 63;
@@ -129,6 +135,27 @@ public sealed class ControlPanel : IDisposable
         (BuildingType.BigTemple, 105)
     };
 
+    /// <summary>
+    /// The goods shown in the stock overview, in the settlers-remake
+    /// MaterialInventoryLayout order (6 rows x 6 columns). Each entry is
+    /// the material and its GUI image (file, index) from EMaterialType.
+    /// </summary>
+    static readonly (Material Material, int File, int Gui)[] StockGoods =
+    {
+        (Material.Plank, 3, 168), (Material.Stone, 3, 174), (Material.Trunk, 3, 171),
+        (Material.Coal, 3, 144), (Material.IronOre, 3, 147), (Material.GoldOre, 3, 150),
+        (Material.Iron, 3, 132), (Material.Hammer, 3, 126), (Material.Blade, 3, 138),
+        (Material.Axe, 3, 153), (Material.Saw, 3, 177), (Material.Pick, 3, 129),
+        (Material.FishingRod, 3, 141), (Material.Scythe, 3, 165), (Material.Sword, 14, 111),
+        (Material.Bow, 14, 114), (Material.Spear, 14, 117), (Material.Mead, 14, 126),
+        (Material.Fish, 3, 189), (Material.Pig, 3, 159), (Material.Meat, 3, 162),
+        (Material.Crop, 3, 180), (Material.Flour, 3, 183), (Material.Bread, 3, 186),
+        (Material.Water, 3, 156), (Material.Wine, 14, 123), (Material.Keg, 24, 123),
+        (Material.Liquor, 34, 132), (Material.Rice, 34, 129), (Material.Honey, 14, 129),
+        (Material.Gold, 3, 135), (Material.Gems, 24, 120), (Material.Sulfur, 34, 126),
+        (Material.GunPowder, 34, 135)
+    };
+
     readonly GL gl;
     readonly TextureAtlas atlas;
     readonly SpriteRenderer sprites;
@@ -143,12 +170,19 @@ public sealed class ControlPanel : IDisposable
     TextureRegion activeMark = null!;
     TextureRegion whiteRegion = null!;
     readonly Dictionary<BuildingType, TextureRegion> buildingIcons = new();
+    readonly Dictionary<Material, TextureRegion> materialIcons = new();
 
     int primaryTab;      // 0 = build, 1 = goods, 2 = settlers
     int secondaryTab;    // 0 = normal, 1 = food, 2 = military, 3 = social
     BuildingType? selectedBuilding;
     bool systemMenuVisible;
     bool isPaused;
+
+    /// <summary>The player whose data the panel shows (inventory, population).</summary>
+    public Player? Player { get; set; }
+
+    /// <summary>The game, used to read the settler statistics.</summary>
+    public Game? Game { get; set; }
 
     float scale = 1f;
 
@@ -232,6 +266,20 @@ public sealed class ControlPanel : IDisposable
             if (image != null)
                 buildingIcons[type] = AddImage(image);
         }
+
+        // Material icons for the stock overview (dat files 3, 14, 24, 34).
+        var materialFiles = new Dictionary<int, DatFileReader>
+        {
+            [3] = buttons,
+            [14] = gameData.LoadGfxFile(MaterialIconsFile2)!,
+            [24] = gameData.LoadGfxFile(MaterialIconsFile3)!,
+            [34] = gameData.LoadGfxFile(MaterialIconsFile4)!
+        };
+        foreach (var (material, file, gui) in StockGoods)
+        {
+            if (materialFiles.TryGetValue(file, out var gfx) && gfx.GetGui(gui) is DatImage image)
+                materialIcons[material] = AddImage(image);
+        }
     }
 
     TextureRegion AddImage(DatImage image) => atlas.AddImage(image.Rgba, image.Width, image.Height);
@@ -299,12 +347,13 @@ public sealed class ControlPanel : IDisposable
         // Primary tabs.
         for (int i = 0; i < 3; i++)
         {
+            int tab = i;
             float x = PrimaryTabLeft + i * (PrimaryTabWidth + PrimaryTabSpacing);
             float y = MiniMapHeight + 9f;
             bool active = i == primaryTab;
             AddSprite(primaryTabs[i * 2 + (active ? 1 : 0)], x, y, PrimaryTabWidth, PrimaryTabHeight);
             if (!systemMenuVisible)
-                AddClickRegion(x, y, PrimaryTabWidth, PrimaryTabHeight, () => SetPrimaryTab(i));
+                AddClickRegion(x, y, PrimaryTabWidth, PrimaryTabHeight, () => SetPrimaryTab(tab));
         }
 
         if (systemMenuVisible)
@@ -313,16 +362,27 @@ public sealed class ControlPanel : IDisposable
             // area (settlers-remake gamePanel layout).
             DrawSystemMenu();
         }
+        else if (primaryTab == 1)
+        {
+            // Goods tab: the player's stock overview.
+            DrawGoodsPanel();
+        }
+        else if (primaryTab == 2)
+        {
+            // Settlers tab: the population statistics.
+            DrawSettlersPanel();
+        }
         else
         {
             // Secondary tabs.
             for (int i = 0; i < 4; i++)
             {
+                int tab = i;
                 float x = SecondaryTabLeft + i * (SecondaryTabWidth + SecondaryTabSpacing);
                 float y = MiniMapHeight + 64f;
                 bool active = i == secondaryTab;
                 AddSprite(secondaryTabs[i * 2 + (active ? 1 : 0)], x, y, SecondaryTabWidth, SecondaryTabHeight);
-                AddClickRegion(x, y, SecondaryTabWidth, SecondaryTabHeight, () => SetSecondaryTab(i));
+                AddClickRegion(x, y, SecondaryTabWidth, SecondaryTabHeight, () => SetSecondaryTab(tab));
             }
 
             // Building buttons in the content pane (2 columns x 6 rows).
@@ -427,6 +487,95 @@ public sealed class ControlPanel : IDisposable
         AddSprite(labeledButton[active ? 1 : 0], x, y, w, h);
         AddClickRegion(x, y, w, h, action);
         DrawLabelCentered(label, x, y, w, h);
+    }
+
+    /// <summary>
+    /// Draws the goods (stock) overview in the content area: the player's
+    /// inventory as a 6x6 grid of material icons with the amount below each
+    /// icon, following the settlers-remake MaterialInventoryLayout.
+    /// </summary>
+    void DrawGoodsPanel()
+    {
+        float contentX = ContentLeft;
+        float contentY = MiniMapHeight + ContentTop;
+        float contentW = ContentWidth;
+        float contentH = ContentHeight;
+
+        const int columns = 6, rows = 6;
+        float cellW = contentW / columns;
+        float cellH = contentH / rows;
+
+        for (int i = 0; i < StockGoods.Length; i++)
+        {
+            var (material, _, _) = StockGoods[i];
+            int col = i % columns;
+            int row = i / columns;
+            float x = contentX + col * cellW;
+            float y = contentY + row * cellH;
+
+            if (materialIcons.TryGetValue(material, out var icon))
+                AddCentered(icon, x, y, cellW, cellH * 0.6f);
+
+            int count = Player?.Inventory.Get(material) ?? 0;
+            DrawText(count.ToString(), x + (cellW - count.ToString().Length * 3f * 5f) / 2f,
+                y + cellH * 0.62f, 3f, 4f);
+        }
+    }
+
+    /// <summary>
+    /// Draws the settler statistics in the content area: the population
+    /// overview (total, free, builders, carriers, collectors, resource
+    /// workers, soldiers) as a simple list, following the settlers-remake
+    /// SettlersStatisticsPanel idea.
+    /// </summary>
+    void DrawSettlersPanel()
+    {
+        float contentX = ContentLeft;
+        float contentY = MiniMapHeight + ContentTop;
+        float contentW = ContentWidth;
+        float contentH = ContentHeight;
+
+        var game = Game;
+        var player = Player;
+        int total = player?.Population ?? 0;
+        int free = player?.FreeSettlers ?? 0;
+        int builders = 0, carriers = 0, collectors = 0, resourceWorkers = 0, soldiers = 0;
+        if (game != null)
+        {
+            foreach (var settler in game.Settlers)
+            {
+                if (settler.Player != (player?.Index ?? 0))
+                    continue;
+                switch (settler.Type)
+                {
+                    case SerfType.Builder: builders++; break;
+                    case SerfType.Carrier: carriers++; break;
+                    case SerfType.Collector: collectors++; break;
+                    case SerfType.ResourceWorker: resourceWorkers++; break;
+                    case SerfType.Soldier: soldiers++; break;
+                }
+            }
+        }
+
+        var rows = new (string Label, int Value)[]
+        {
+            ("TOTAL", total),
+            ("FREE", free),
+            ("BUILDER", builders),
+            ("CARRIER", carriers),
+            ("COLLECTOR", collectors),
+            ("RESOURCE", resourceWorkers),
+            ("SOLDIER", soldiers)
+        };
+
+        float rowH = contentH / (rows.Length + 1);
+        DrawText("SETTLERS", contentX + 8f, contentY + 4f, 3f, 4f);
+        for (int i = 0; i < rows.Length; i++)
+        {
+            float y = contentY + (i + 1) * rowH;
+            DrawText(rows[i].Label, contentX + 8f, y, 3f, 4f);
+            DrawText(rows[i].Value.ToString(), contentX + contentW - 8f - rows[i].Value.ToString().Length * 3f * 5f, y, 3f, 4f);
+        }
     }
 
     void DrawLabelCentered(string text, float x, float y, float width, float height)

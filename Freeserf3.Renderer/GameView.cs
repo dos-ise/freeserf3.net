@@ -164,6 +164,10 @@ public sealed class GameView : IDisposable
         log($"Round started: {game.Players.Count} players, target population {game.TargetPopulation}");
         log($"Stacks: {game.Stacks.Count}, collectors: {game.Collectors.Count}");
 
+        // The control panel shows the human player's data.
+        controlPanel.Player = game.GetPlayer(0);
+        controlPanel.Game = game;
+
         // Demo: place the production chain (lumberjack, stonecutter,
         // sawmill) so the building and resource features are visible.
         var demoBuildings = game.PlaceDemoBuildings();
