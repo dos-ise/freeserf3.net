@@ -128,8 +128,8 @@ public class GameTests : DataTestBase
 
         var player = game.GetPlayer(0);
         Assert.IsNotNull(player);
-        Assert.AreEqual(10, player!.Inventory.Get(Material.Plank));
-        Assert.AreEqual(10, player.Inventory.Get(Material.Stone));
+        Assert.AreEqual(20, player!.Inventory.Get(Material.Plank));
+        Assert.AreEqual(20, player.Inventory.Get(Material.Stone));
     }
 
     [TestMethod]
@@ -176,9 +176,9 @@ public class GameTests : DataTestBase
         Assert.AreEqual(BuildingState.Active, building.State);
         Assert.AreEqual(100, building.ConstructionProgress);
         Assert.AreEqual(0, game.Builders.Count);
-        // 2 stone + 2 plank consumed from the starting stock (10 each).
-        Assert.AreEqual(8, game.GetPlayer(0)!.Inventory.Get(Material.Stone));
-        Assert.AreEqual(8, game.GetPlayer(0)!.Inventory.Get(Material.Plank));
+        // 2 stone + 2 plank consumed from the starting stock (20 each).
+        Assert.AreEqual(18, game.GetPlayer(0)!.Inventory.Get(Material.Stone));
+        Assert.AreEqual(18, game.GetPlayer(0)!.Inventory.Get(Material.Plank));
     }
 
     [TestMethod]
@@ -358,8 +358,8 @@ public class GameTests : DataTestBase
 
         Assert.AreEqual(0, building.Output.Get(Material.Plank));
         Assert.AreEqual(0, building.Flag!.Count);
-        // 7 plank left after construction (10 - 3) plus 1 produced.
-        Assert.AreEqual(8, game.GetPlayer(0)!.Inventory.Get(Material.Plank));
+        // 17 plank left after construction (20 - 3) plus 1 produced.
+        Assert.AreEqual(18, game.GetPlayer(0)!.Inventory.Get(Material.Plank));
     }
 
     [TestMethod]
@@ -573,7 +573,7 @@ public class GameTests : DataTestBase
 
         // The stack lost goods and the player's stock gained them.
         Assert.IsTrue(game.Stacks[0].Count < 6);
-        Assert.AreEqual(10 + (6 - game.Stacks[0].Count), game.GetPlayer(0)!.Inventory.Get(Material.Plank));
+        Assert.AreEqual(20 + (6 - game.Stacks[0].Count), game.GetPlayer(0)!.Inventory.Get(Material.Plank));
     }
 
     [TestMethod]
@@ -670,5 +670,39 @@ public class GameTests : DataTestBase
         // Target is starting population (3) plus the growth goal (20).
         Assert.AreEqual(23, game.TargetPopulation);
         Assert.IsFalse(game.IsWon);
+    }
+
+    [TestMethod]
+    public void SawmillGetsTrunkDeliveredByCarrier()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Build a sawmill and let it become active.
+        var sawmill = game.PlaceBuilding(BuildingType.Sawmill, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, sawmill.State);
+        sawmill.AssignWorker(WorkerType.Sawmiller);
+
+        // The player has a trunk in stock; the sawmill needs it as input.
+        var player = game.GetPlayer(0)!;
+        player.Inventory.Add(Material.Trunk, 1);
+
+        // The trunk is sent to the stock flag, carried to the sawmill flag
+        // and moved into the sawmill's input.
+        bool delivered = false;
+        for (int i = 0; i < 2000 && !delivered; i++)
+        {
+            game.TickOnce();
+            delivered = sawmill.Input.Get(Material.Trunk) > 0;
+        }
+
+        Assert.IsTrue(delivered, "The trunk was not delivered to the sawmill.");
+        Assert.AreEqual(0, player.Inventory.Get(Material.Trunk));
     }
 }

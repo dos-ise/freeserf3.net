@@ -151,8 +151,10 @@ public sealed class Game
         foreach (var player in Players)
         {
             // Starting stock so the first buildings can be constructed.
-            player.Inventory.Set(Material.Plank, 10);
-            player.Inventory.Set(Material.Stone, 10);
+            // Generous enough for the demo production chain (lumberjack,
+            // forester, stonecutter and sawmill) plus a small buffer.
+            player.Inventory.Set(Material.Plank, 20);
+            player.Inventory.Set(Material.Stone, 20);
 
             // The map's settlers of this player form the initial population.
             int count = Map.Settlers.Count(s => s.Party == player.Index);
@@ -932,6 +934,27 @@ public sealed class Game
     }
 
     /// <summary>
+    /// Whether the given material is a production input that one of the
+    /// player's active producer buildings is waiting for. Such materials
+    /// stay at the stock flag so the carriers can deliver them.
+    /// </summary>
+    bool IsInputMaterialNeeded(Player player, Material material)
+    {
+        foreach (var building in Buildings)
+        {
+            if (building.Player != player.Index)
+                continue;
+            if (building.State != BuildingState.Active)
+                continue;
+            if (!building.Definition.IsProducer)
+                continue;
+            if (building.Definition.Consumes(material) && building.Input.Get(material) <= 0)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Advances the game by one tick. The clock is incremented and all
     /// buildings are simulated (worker assignment and production); produced
     /// goods are queued at the building flags and carried to the player's
@@ -949,26 +972,15 @@ public sealed class Game
             var player = GetPlayer(building.Player);
             if (player != null)
             {
-                // Deliver inputs from the player's stock (M3: directly;
-                // carrier-based input delivery is a later milestone).
-                foreach (var input in building.Definition.Inputs)
+                // Leftover construction materials of finished buildings go back
+                // to the player's stock.
+                if (building.State != BuildingState.ConstructionSite && !building.DeliveredMaterials.IsEmpty)
                 {
-                    if (building.Input.Get(input) <= 0 && player.Inventory.Get(input) > 0)
+                    foreach (var (material, count) in building.DeliveredMaterials.NonEmpty())
                     {
-                        player.Inventory.Remove(input);
-                        building.Input.Add(input);
+                        player.Inventory.Add(material, count);
+                        building.DeliveredMaterials.Remove(material, count);
                     }
-                }
-            }
-
-            // Leftover construction materials of finished buildings go back
-            // to the player's stock.
-            if (building.State != BuildingState.ConstructionSite && !building.DeliveredMaterials.IsEmpty && player != null)
-            {
-                foreach (var (material, count) in building.DeliveredMaterials.NonEmpty())
-                {
-                    player.Inventory.Add(material, count);
-                    building.DeliveredMaterials.Remove(material, count);
                 }
             }
 
@@ -1041,9 +1053,29 @@ public sealed class Game
             }
         }
 
+        // Production inputs that arrived at the building flags are moved
+        // into the building's input before the carriers can take them back
+        // to the stock.
+        foreach (var building in Buildings)
+        {
+            if (building.State != BuildingState.Active || building.Flag == null)
+                continue;
+            if (!building.Definition.IsProducer)
+                continue;
+
+            foreach (var input in building.Definition.Inputs)
+            {
+                while (building.Input.Get(input) <= 0 && building.Flag.Contains(input))
+                {
+                    building.Flag.TakeGood(input);
+                    building.Input.Add(input);
+                }
+            }
+        }
+
         // Goods that arrived at the stock flags go into the player's stock.
-        // Materials still needed by a construction site stay at the flag so
-        // the carriers can deliver them.
+        // Materials still needed by a construction site or as a production
+        // input stay at the flag so the carriers can deliver them.
         for (int i = 0; i < Networks.Count; i++)
         {
             var player = GetPlayer(i);
@@ -1054,7 +1086,7 @@ public sealed class Game
             while (stock.Count > 0)
             {
                 var good = stock.Peek();
-                if (good.HasValue && IsConstructionMaterialNeeded(player, good.Value))
+                if (good.HasValue && (IsConstructionMaterialNeeded(player, good.Value) || IsInputMaterialNeeded(player, good.Value)))
                     break;
 
                 var taken = stock.TakeGood();
@@ -1087,6 +1119,37 @@ public sealed class Game
 
                     player.Inventory.Remove(material);
                     stock.AddGood(material);
+                    break;
+                }
+            }
+        }
+
+        // Production inputs are sent from the player's stock to the
+        // building flags through the transport network; the carriers bring
+        // them to the producer buildings.
+        for (int i = 0; i < Networks.Count; i++)
+        {
+            var player = GetPlayer(i);
+            var stock = Networks[i].StockFlag;
+            if (player == null || stock == null)
+                continue;
+
+            foreach (var building in Buildings)
+            {
+                if (building.Player != i || building.State != BuildingState.Active)
+                    continue;
+                if (!building.Definition.IsProducer)
+                    continue;
+
+                foreach (var input in building.Definition.Inputs)
+                {
+                    if (building.Input.Get(input) > 0)
+                        continue;
+                    if (player.Inventory.Get(input) <= 0)
+                        continue;
+
+                    player.Inventory.Remove(input);
+                    stock.AddGood(input);
                     break;
                 }
             }
