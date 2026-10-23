@@ -88,7 +88,11 @@ public sealed class Road
             case CarrierState.WalkingToEnd:
                 if (CarrierPathIndex < Path.Count)
                 {
-                    Carrier.Position = Path[CarrierPathIndex];
+                    var next = Path[CarrierPathIndex];
+                    var direction = Carrier.Position.GetDirectionTo(next);
+                    if (direction.HasValue)
+                        Carrier.Facing = direction.Value;
+                    Carrier.Position = next;
                     CarrierPathIndex++;
                 }
                 if (CarrierPathIndex >= Path.Count)
@@ -112,7 +116,11 @@ public sealed class Road
             case CarrierState.WalkingToStart:
                 if (CarrierPathIndex >= 0)
                 {
-                    Carrier.Position = Path[CarrierPathIndex];
+                    var next = Path[CarrierPathIndex];
+                    var direction = Carrier.Position.GetDirectionTo(next);
+                    if (direction.HasValue)
+                        Carrier.Facing = direction.Value;
+                    Carrier.Position = next;
                     CarrierPathIndex--;
                 }
                 if (CarrierPathIndex < 0)

@@ -40,6 +40,9 @@ public abstract class Movable
     /// <summary>Current position on the grid.</summary>
     public Position Position { get; set; }
 
+    /// <summary>The direction the unit is currently facing (last movement direction).</summary>
+    public Direction Facing { get; set; } = Direction.SouthWest;
+
     /// <summary>Final destination, or null if none.</summary>
     public Position? Target { get; set; }
 
@@ -83,7 +86,11 @@ public abstract class Movable
             return;
         }
 
-        Position = Path[PathIndex];
+        var next = Path[PathIndex];
+        var direction = Position.GetDirectionTo(next);
+        if (direction.HasValue)
+            Facing = direction.Value;
+        Position = next;
         PathIndex++;
 
         if (PathIndex >= Path.Count)

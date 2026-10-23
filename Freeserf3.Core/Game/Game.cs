@@ -182,7 +182,9 @@ public sealed class Game
         var landscape = LandscapeMapping.FromMapValue(map.GetCell(pos).Landscape);
         return landscape is not (LandscapeType.Water1 or LandscapeType.Water2 or LandscapeType.Water3
             or LandscapeType.Water4 or LandscapeType.Water5 or LandscapeType.Water6
-            or LandscapeType.Water7 or LandscapeType.Water8);
+            or LandscapeType.Water7 or LandscapeType.Water8
+            or LandscapeType.River1 or LandscapeType.River2 or LandscapeType.River3
+            or LandscapeType.River4);
     }
 
     /// <summary>All carriers of all players (for rendering).</summary>

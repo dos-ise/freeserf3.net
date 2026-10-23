@@ -475,14 +475,15 @@ public sealed class GameObjectRenderer : IDisposable
 
     /// <summary>
     /// Adds a settler sprite at the given position. <paramref name="frame"/>
-    /// selects the animation frame of the walking sequence.
+    /// selects the walking animation step (0-10) and <paramref name="direction"/>
+    /// the facing direction of the walking sequence.
     /// </summary>
-    public void AddMovable(Position pos, int height, int playerColor, int frame = 0)
+    public void AddMovable(Position pos, int height, int playerColor, int frame, Direction direction = Direction.SouthWest)
     {
         if (!settlerImages.TryGetValue((playerColor, 0), out var frames) || frames.Length == 0)
             return;
 
-        AddSprite(frames[frame % frames.Length], pos, height, 0.5f);
+        AddSprite(frames[DirectionFrameIndex(direction, frame)], pos, height, 0.5f);
     }
 
     /// <summary>
@@ -490,13 +491,23 @@ public sealed class GameObjectRenderer : IDisposable
     /// dedicated carrying animation (sequence 1-12, good on the back) that
     /// sequence is used, otherwise the plain walking animation (sequence 0).
     /// </summary>
-    public void AddCarrier(Position pos, int height, int playerColor, int frame, Material? carried)
+    public void AddCarrier(Position pos, int height, int playerColor, int frame, Material? carried, Direction direction = Direction.SouthWest)
     {
         int sequence = carried.HasValue && CarrierSequences.TryGetValue(carried.Value, out int s) ? s : 0;
         if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
             return;
 
-        AddSprite(frames[frame % frames.Length], pos, height, 0.5f);
+        AddSprite(frames[DirectionFrameIndex(direction, frame)], pos, height, 0.5f);
+    }
+
+    /// <summary>
+    /// Frame index of the walking animation for the given direction. Each
+    /// settler sequence holds 6 directions x 12 frames (1 idle + 11 walk).
+    /// </summary>
+    static int DirectionFrameIndex(Direction direction, int frame)
+    {
+        int offset = ((int)direction + 3) % 6 * 12;
+        return offset + 1 + (frame % 11);
     }
 
     /// <summary>Adds a road quad at the given grid position.</summary>

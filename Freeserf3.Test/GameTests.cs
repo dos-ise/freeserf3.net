@@ -237,6 +237,52 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void IsWalkableRejectsRivers()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Grass is walkable.
+        Assert.IsTrue(game.IsWalkable(map, new Position(1, 1)));
+
+        // Rivers are not walkable (carriers must not walk over water).
+        var cell = map.GetCell(2, 2);
+        cell.Landscape = 96; // River1
+        map.SetCell(2, 2, cell);
+        Assert.IsFalse(game.IsWalkable(map, new Position(2, 2)));
+
+        cell.Landscape = 99; // River4
+        map.SetCell(2, 2, cell);
+        Assert.IsFalse(game.IsWalkable(map, new Position(2, 2)));
+    }
+
+    [TestMethod]
+    public void SerfFacingFollowsMovementDirection()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var serf = new Serf(0, new Position(2, 2), SerfType.Carrier);
+        // Walk east: (2,2) -> (3,2) -> (4,2).
+        serf.SetPath(new List<Position> { new(3, 2), new(4, 2) });
+        serf.Tick();
+        Assert.AreEqual(Direction.East, serf.Facing);
+        Assert.AreEqual(new Position(3, 2), serf.Position);
+
+        // Walk north-west: (3,2) -> (2,1).
+        serf.SetPath(new List<Position> { new(2, 1) });
+        serf.Tick();
+        Assert.AreEqual(Direction.NorthWest, serf.Facing);
+        Assert.AreEqual(new Position(2, 1), serf.Position);
+    }
+
+    [TestMethod]
     public void PlaceBuildingCreatesCarrierRoad()
     {
         var map = new Map(8);
