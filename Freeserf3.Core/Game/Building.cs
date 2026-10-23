@@ -67,6 +67,12 @@ public sealed class Building
     /// <summary>Construction materials already delivered to the site.</summary>
     public Inventory DeliveredMaterials { get; } = new();
 
+    /// <summary>
+    /// The flag in front of the building. Produced goods are queued here
+    /// and carried to the player's stock by a carrier.
+    /// </summary>
+    public Flag? Flag { get; set; }
+
     /// <summary>Whether all construction materials have been delivered.</summary>
     public bool IsFullySupplied
     {

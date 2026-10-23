@@ -13,6 +13,7 @@
  */
 
 using System.Linq;
+using Freeserf3.Data;
 
 namespace Freeserf3.Simulation;
 
@@ -42,6 +43,9 @@ public sealed class Game
 
     /// <summary>All buildings placed during play (not the map-file ones).</summary>
     public List<Building> Buildings { get; } = new();
+
+    /// <summary>The transport network of each player (index = player index).</summary>
+    public List<TransportNetwork> Networks { get; } = new();
 
     /// <summary>Population needed to win the round.</summary>
     public int TargetPopulation { get; set; } = 20;
@@ -74,6 +78,7 @@ public sealed class Game
     {
         CreatePlayers();
         Buildings.Clear();
+        Networks.Clear();
         IsWon = false;
 
         foreach (var player in Players)
@@ -86,6 +91,11 @@ public sealed class Game
             int count = Map.Settlers.Count(s => s.Party == player.Index);
             player.Population = count;
             player.FreeSettlers = count;
+
+            // The player's transport network with its central stock flag.
+            var network = new TransportNetwork(Map);
+            network.AddStockFlag(player.StartPosition, player.Index);
+            Networks.Add(network);
         }
 
         // The win target is the starting population plus a growth goal, so
@@ -104,27 +114,81 @@ public sealed class Game
 
     /// <summary>
     /// Places a new building for the given player. The building starts as a
-    /// construction site and is built over time.
+    /// construction site and is built over time. Its flag is connected to
+    /// the player's stock flag so produced goods can be carried away.
     /// </summary>
     public Building PlaceBuilding(BuildingType type, Position position, int playerIndex)
     {
         var building = new Building(type, position, playerIndex);
         Buildings.Add(building);
+
+        if (playerIndex >= 0 && playerIndex < Networks.Count)
+        {
+            var network = Networks[playerIndex];
+            var flag = network.AddFlag(position, playerIndex);
+            building.Flag = flag;
+
+            if (network.StockFlag != null)
+                network.Connect(flag, network.StockFlag, playerIndex, IsWalkable);
+        }
+
         return building;
+    }
+
+    /// <summary>Whether a carrier can walk on the given cell (not water).</summary>
+    public bool IsWalkable(Map map, Position pos)
+    {
+        if (!map.IsInBounds(pos))
+            return false;
+
+        var landscape = LandscapeMapping.FromMapValue(map.GetCell(pos).Landscape);
+        return landscape is not (LandscapeType.Water1 or LandscapeType.Water2 or LandscapeType.Water3
+            or LandscapeType.Water4 or LandscapeType.Water5 or LandscapeType.Water6
+            or LandscapeType.Water7 or LandscapeType.Water8);
+    }
+
+    /// <summary>All carriers of all players (for rendering).</summary>
+    public IEnumerable<Serf> Carriers
+    {
+        get
+        {
+            foreach (var network in Networks)
+            {
+                foreach (var road in network.Roads)
+                    yield return road.Carrier;
+            }
+        }
     }
 
     /// <summary>
     /// Advances the game by one tick. The clock is incremented and all
     /// buildings are simulated (construction, worker assignment and
-    /// production); living houses grow the population.
+    /// production); produced goods are queued at the building flags and
+    /// carried to the player's stock by the carriers. Living houses grow
+    /// the population.
     /// </summary>
     public void TickOnce()
     {
         Tick++;
 
+        // Buildings: deliver inputs, produce, assign workers, queue outputs.
         foreach (var building in Buildings)
         {
             var player = GetPlayer(building.Player);
+            if (player != null)
+            {
+                // Deliver inputs from the player's stock (M3: directly;
+                // carrier-based input delivery is a later milestone).
+                foreach (var input in building.Definition.Inputs)
+                {
+                    if (building.Input.Get(input) <= 0 && player.Inventory.Get(input) > 0)
+                    {
+                        player.Inventory.Remove(input);
+                        building.Input.Add(input);
+                    }
+                }
+            }
+
             building.Tick(player);
 
             // A finished building gets a worker from the free settlers.
@@ -138,17 +202,38 @@ public sealed class Game
                 building.AssignWorker(building.Definition.Worker);
             }
 
-            // Produced goods go straight to the player's stock (transport
-            // via carriers is a later milestone).
-            if (player != null && building.Output.TotalCount > 0)
+            // Produced goods are queued at the building's flag for the
+            // carrier to pick up.
+            if (building.Flag != null && building.Output.TotalCount > 0)
             {
                 foreach (var (material, count) in building.Output.NonEmpty())
                 {
-                    player.Inventory.Add(material, count);
+                    for (int i = 0; i < count; i++)
+                        building.Flag.AddGood(material);
                     building.Output.Remove(material, count);
                 }
             }
         }
+
+        // Goods that arrived at the stock flags go into the player's stock.
+        for (int i = 0; i < Networks.Count; i++)
+        {
+            var player = GetPlayer(i);
+            var stock = Networks[i].StockFlag;
+            if (player == null || stock == null)
+                continue;
+
+            while (stock.Count > 0)
+            {
+                var good = stock.TakeGood();
+                if (good.HasValue)
+                    player.Inventory.Add(good.Value);
+            }
+        }
+
+        // Carriers walk along the roads and move the goods.
+        foreach (var network in Networks)
+            network.Tick();
 
         // Living houses grow the population over time.
         if (Tick % 600 == 0)

@@ -196,6 +196,7 @@ public class GameTests : DataTestBase
         var map = new Map(8);
         map.Players.Add(new MapPlayerInfo { Name = "P0" });
         map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
         var game = new Game(map, 42);
         game.StartGame();
 
@@ -210,12 +211,47 @@ public class GameTests : DataTestBase
         // Give the sawmill a trunk and let it produce.
         building.Input.Add(Material.Trunk);
         int productionTime = building.Definition.ProductionTime;
-        for (int i = 0; i < productionTime; i++)
+        // Production plus time for the carrier to deliver the plank to the
+        // player's stock.
+        for (int i = 0; i < productionTime + 20; i++)
             game.TickOnce();
 
         Assert.AreEqual(0, building.Output.Get(Material.Plank));
+        Assert.AreEqual(0, building.Flag!.Count);
         // 7 plank left after construction (10 - 3) plus 1 produced.
         Assert.AreEqual(8, game.GetPlayer(0)!.Inventory.Get(Material.Plank));
+    }
+
+    /// <summary>Sets all cells of the map to grass so roads can be built.</summary>
+    static void SetGrass(Map map)
+    {
+        for (int y = 0; y < map.Size; y++)
+        {
+            for (int x = 0; x < map.Size; x++)
+            {
+                var cell = map.GetCell(x, y);
+                cell.Landscape = 16; // Grass
+                map.SetCell(x, y, cell);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void PlaceBuildingCreatesCarrierRoad()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(1, 1), 0);
+        var network = game.Networks[0];
+
+        Assert.IsNotNull(building.Flag);
+        Assert.AreEqual(1, network.Roads.Count);
+        Assert.AreEqual(1, game.Carriers.Count());
+        Assert.AreEqual(SerfType.Carrier, game.Carriers.First().Type);
     }
 
     [TestMethod]

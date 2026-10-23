@@ -129,6 +129,7 @@ public sealed class MainWindow : IDisposable
         // Game objects: buildings (dat 13), settlers (dat 10), roads, flags.
         var buildingsGfx = gameData.LoadGfxFile(GameObjectRenderer.BuildingsFile);
         var settlersGfx = gameData.LoadGfxFile(GameObjectRenderer.SettlersFile);
+        var objectsGfx = gameData.LoadGfxFile(GameObjectRenderer.ObjectsFile);
         if (buildingsGfx != null && settlersGfx != null)
         {
             gameObjects = new GameObjectRenderer(State.Gl);
@@ -136,6 +137,8 @@ public sealed class MainWindow : IDisposable
                 .Concat(map.Buildings.Select(b => (int)b.Party))
                 .Distinct();
             gameObjects.Load(buildingsGfx, settlersGfx, playerColors);
+            if (objectsGfx != null)
+                gameObjects.LoadObjects(objectsGfx, buildingsGfx, playerColors);
             Console.WriteLine($"Buildings: {map.Buildings.Count}, settlers: {map.Settlers.Count}");
         }
         else
@@ -264,6 +267,17 @@ public sealed class MainWindow : IDisposable
             gameObjects.AddMovable(pos, gameMap.GetCell(pos).Height, settler.Party, frame);
         }
 
+        // Carriers walking along the roads.
+        if (game != null)
+        {
+            foreach (var carrier in game.Carriers)
+            {
+                if (!gameMap.IsInBounds(carrier.Position))
+                    continue;
+                gameObjects.AddMovable(carrier.Position, gameMap.GetCell(carrier.Position).Height, carrier.Player, frame);
+            }
+        }
+
         // Roads and flags from the cell state.
         for (int y = 0; y < size; y++)
         {
@@ -276,6 +290,46 @@ public sealed class MainWindow : IDisposable
                     gameObjects.AddRoad(pos, cell.Height);
                 if (cell.HasFlag)
                     gameObjects.AddFlag(pos, cell.Height);
+            }
+        }
+
+        // Trees and other map objects.
+        ulong tick = game?.Tick ?? 0;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                var cell = gameMap.GetCell(x, y);
+                if (GameObjectRenderer.IsTreeObject(cell.MapObject))
+                    gameObjects.AddTree(new Position(x, y), cell.Height, tick);
+            }
+        }
+
+        // Player border posts: drawn where the territory owner changes
+        // between neighbouring cells.
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                var cell = gameMap.GetCell(x, y);
+                if (cell.Player == 0)
+                    continue;
+
+                bool isBorder = false;
+                foreach (var direction in MapGeometry.AllDirections())
+                {
+                    var neighbor = new Position(x, y).GetNeighbor(direction);
+                    if (!gameMap.IsInBounds(neighbor))
+                        continue;
+                    if (gameMap.GetCell(neighbor).Player != cell.Player)
+                    {
+                        isBorder = true;
+                        break;
+                    }
+                }
+
+                if (isBorder)
+                    gameObjects.AddBorder(new Position(x, y), cell.Height, cell.Player);
             }
         }
 

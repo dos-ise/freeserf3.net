@@ -25,7 +25,22 @@ public class TransportTests
     }
 
     [TestMethod]
-    public void RoadTransportsGoodsToEndFlag()
+    public void FlagTakesSpecificGood()
+    {
+        var flag = new Flag(new Position(2, 2), 0);
+        flag.AddGood(Material.Plank);
+        flag.AddGood(Material.Stone);
+        flag.AddGood(Material.Plank);
+
+        Assert.IsTrue(flag.Contains(Material.Stone));
+        Assert.AreEqual(Material.Stone, flag.TakeGood(Material.Stone));
+        Assert.IsFalse(flag.Contains(Material.Stone));
+        Assert.AreEqual(2, flag.Count);
+        Assert.IsNull(flag.TakeGood(Material.Trunk));
+    }
+
+    [TestMethod]
+    public void CarrierTransportsGoodToEndFlag()
     {
         var start = new Flag(new Position(0, 0), 0);
         var end = new Flag(new Position(4, 0), 0);
@@ -36,42 +51,46 @@ public class TransportTests
             new(3, 0),
             new(4, 0)
         };
-        var road = new Road(start, end, path);
+        var road = new Road(start, end, path, 0);
 
-        road.SendGood(Material.Plank);
-        Assert.AreEqual(1, road.TransitCount);
-        Assert.AreEqual(0, end.Count);
+        start.AddGood(Material.Plank);
 
-        // 4 steps to reach the end flag.
+        // Tick 1: the carrier picks up the good and starts walking.
+        road.Tick();
+        Assert.IsTrue(road.IsCarrying);
+        Assert.AreEqual(new Position(0, 0), road.Carrier.Position);
+
+        // 4 more ticks to walk the 4 path cells and drop at the end flag.
         for (int i = 0; i < 4; i++)
             road.Tick();
 
-        Assert.AreEqual(0, road.TransitCount);
+        Assert.IsFalse(road.IsCarrying);
         Assert.AreEqual(1, end.Count);
         Assert.AreEqual(Material.Plank, end.TakeGood());
     }
 
     [TestMethod]
-    public void RoadTransportsMultipleGoods()
+    public void CarrierWalksBackAndForth()
     {
         var start = new Flag(new Position(0, 0), 0);
         var end = new Flag(new Position(2, 0), 0);
-        var road = new Road(start, end, new List<Position> { new(1, 0), new(2, 0) });
+        var road = new Road(start, end, new List<Position> { new(1, 0), new(2, 0) }, 0);
 
-        road.SendGood(Material.Plank);
+        start.AddGood(Material.Plank);
 
-        // First good arrives after 2 ticks.
+        // Pick up and walk to the end (2 cells).
+        road.Tick();
         road.Tick();
         road.Tick();
         Assert.AreEqual(1, end.Count);
         Assert.AreEqual(Material.Plank, end.TakeGood());
 
-        // A second good sent later arrives after 2 more ticks.
-        road.SendGood(Material.Stone);
+        // The carrier turns around and walks back to the start.
         road.Tick();
         road.Tick();
-        Assert.AreEqual(1, end.Count);
-        Assert.AreEqual(Material.Stone, end.TakeGood());
+        road.Tick();
+        Assert.AreEqual(new Position(0, 0), road.Carrier.Position);
+        Assert.AreEqual(CarrierState.IdleAtStart, road.CarrierState);
     }
 
     [TestMethod]
@@ -83,7 +102,7 @@ public class TransportTests
         var flagA = network.AddFlag(new Position(1, 1), 0);
         var flagB = network.AddFlag(new Position(5, 1), 0);
 
-        var road = network.Connect(flagA, flagB);
+        var road = network.Connect(flagA, flagB, 0);
         Assert.IsNotNull(road);
         Assert.AreEqual(flagA, road!.Start);
         Assert.AreEqual(flagB, road.End);
@@ -100,7 +119,7 @@ public class TransportTests
         var flagB = network.AddFlag(new Position(7, 7), 0);
 
         // Block everything except the start.
-        var road = network.Connect(flagA, flagB, (m, pos) => pos == new Position(0, 0));
+        var road = network.Connect(flagA, flagB, 0, (m, pos) => pos == new Position(0, 0));
         Assert.IsNull(road);
     }
 
@@ -112,13 +131,13 @@ public class TransportTests
 
         var flagA = network.AddFlag(new Position(0, 0), 0);
         var flagB = network.AddFlag(new Position(3, 0), 0);
-        var road = network.Connect(flagA, flagB);
+        var road = network.Connect(flagA, flagB, 0);
         Assert.IsNotNull(road);
 
         flagA.AddGood(Material.Trunk);
-        road!.SendGood(flagA.TakeGood()!.Value);
 
-        for (int i = 0; i < 3; i++)
+        // Pick up (1) + walk 3 cells = 4 ticks.
+        for (int i = 0; i < 4; i++)
             network.Tick();
 
         Assert.AreEqual(1, flagB.Count);
@@ -134,5 +153,16 @@ public class TransportTests
 
         Assert.AreEqual(flag, network.GetFlag(new Position(3, 4)));
         Assert.IsNull(network.GetFlag(new Position(5, 5)));
+    }
+
+    [TestMethod]
+    public void StockFlagIsSet()
+    {
+        var map = new Map(16);
+        var network = new TransportNetwork(map);
+        var stock = network.AddStockFlag(new Position(2, 2), 0);
+
+        Assert.AreEqual(stock, network.StockFlag);
+        Assert.AreEqual(0, stock.Player);
     }
 }

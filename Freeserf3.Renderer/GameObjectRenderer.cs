@@ -56,11 +56,20 @@ public sealed class GameObjectRenderer : IDisposable
     /// <summary>Roman settler sprites are stored in dat file 10.</summary>
     public const int SettlersFile = 10;
 
+    /// <summary>Map objects (trees, stones, ...) are stored in dat file 1.</summary>
+    public const int ObjectsFile = 1;
+
     /// <summary>Flag door sequence in the buildings file.</summary>
     public const int FlagSequence = 63;
 
+    /// <summary>Border post sequence in the buildings file.</summary>
+    public const int BorderSequence = 65;
+
     /// <summary>Road landscape image in the landscape file.</summary>
     public const int RoadImage = 34;
+
+    /// <summary>Tree sprite sequences in the objects file (from settlers-remake).</summary>
+    public static readonly int[] TreeSequences = { 1, 2, 4, 7, 8, 16, 17 };
 
     /// <summary>Building sprite sequence per building type (from the building XMLs).</summary>
     public static readonly Dictionary<BuildingType, int> BuildingSequences = new()
@@ -116,6 +125,8 @@ public sealed class GameObjectRenderer : IDisposable
     readonly TextureAtlas atlas;
     readonly Dictionary<int, SpriteImage> buildingImages = new();
     readonly Dictionary<(int Color, int Sequence), SpriteImage[]> settlerImages = new();
+    readonly Dictionary<int, SpriteImage[]> treeImages = new();
+    readonly Dictionary<int, SpriteImage> borderImages = new();
     SpriteImage? flagImage;
     SpriteImage? roadImage;
     TextureRegion whiteRegion;
@@ -200,6 +211,61 @@ public sealed class GameObjectRenderer : IDisposable
         var road = buildings.GetLandscape(RoadImage);
         if (road != null)
             roadImage = AddToAtlas(road);
+    }
+
+    /// <summary>
+    /// Loads the map object images (trees) from dat file 1 and the border
+    /// posts (tinted per player color) from the buildings file.
+    /// </summary>
+    public void LoadObjects(DatFileReader objects, DatFileReader buildings, IEnumerable<int> playerColors)
+    {
+        // Trees: one animated sequence per tree type.
+        foreach (int sequence in TreeSequences)
+        {
+            var frames = objects.GetSettlerSequence(sequence);
+            if (frames.Length == 0)
+                continue;
+
+            var images = new SpriteImage[frames.Length];
+            for (int i = 0; i < frames.Length; i++)
+                images[i] = AddToAtlas(frames[i]);
+            treeImages[sequence] = images;
+        }
+        Console.WriteLine($"Trees: {treeImages.Count} sequences loaded");
+
+        // Border posts tinted with the player colors.
+        var borderFrames = buildings.GetSettlerSequence(BorderSequence);
+        if (borderFrames.Length > 0)
+        {
+            var colors = playerColors.Distinct().Where(c => c >= 0 && c < PlayerColors.Length).ToList();
+            if (colors.Count == 0)
+                colors.Add(0);
+
+            foreach (int color in colors)
+            {
+                borderImages[color] = AddToAtlas(TintImage(borderFrames[0], PlayerColors[color]));
+            }
+        }
+        Console.WriteLine($"Borders: {borderImages.Count} colors loaded");
+    }
+
+    // Tints a grayscale image with the given color (used for border posts).
+    static DatImage TintImage(DatImage image, (byte R, byte G, byte B) color)
+    {
+        var rgba = new byte[image.Rgba.Length];
+        for (int i = 0; i < image.Rgba.Length; i += 4)
+        {
+            byte a = image.Rgba[i + 3];
+            if (a == 0)
+                continue;
+            // Use the blue channel as the tint intensity.
+            int intensity = image.Rgba[i + 2];
+            rgba[i] = (byte)(color.R * intensity / 255);
+            rgba[i + 1] = (byte)(color.G * intensity / 255);
+            rgba[i + 2] = (byte)(color.B * intensity / 255);
+            rgba[i + 3] = a;
+        }
+        return new DatImage(image.Width, image.Height, image.OffsetX, image.OffsetY, rgba);
     }
 
     SpriteImage AddToAtlas(DatImage image)
@@ -329,7 +395,7 @@ public sealed class GameObjectRenderer : IDisposable
         if (!buildingImages.TryGetValue(sequence, out var image))
             return;
 
-        AddSprite(image, pos, height, 0f);
+        AddSprite(image, pos, height, 0.2f);
     }
 
     /// <summary>
@@ -350,7 +416,7 @@ public sealed class GameObjectRenderer : IDisposable
         if (roadImage == null)
             return;
 
-        AddSprite(roadImage.Value, pos, height, 0.1f);
+        AddSprite(roadImage.Value, pos, height, 0f);
     }
 
     /// <summary>Adds a flag sprite at the given grid position.</summary>
@@ -359,7 +425,45 @@ public sealed class GameObjectRenderer : IDisposable
         if (flagImage == null)
             return;
 
-        AddSprite(flagImage.Value, pos, height, 0.2f);
+        AddSprite(flagImage.Value, pos, height, 0.1f);
+    }
+
+    /// <summary>
+    /// Adds a tree sprite at the given grid position. The tree type is
+    /// derived from the position (like settlers-remake) and the animation
+    /// frame from the game clock.
+    /// </summary>
+    public void AddTree(Position pos, int height, ulong tick)
+    {
+        if (treeImages.Count == 0)
+            return;
+
+        int treeType = (pos.X + pos.X / 5 + pos.Y / 3 + pos.Y + pos.Y / 7) % TreeSequences.Length;
+        int sequence = TreeSequences[treeType];
+        if (!treeImages.TryGetValue(sequence, out var frames) || frames.Length == 0)
+            return;
+
+        int step = (int)((tick + (ulong)(pos.X * 167 + pos.Y * 1223)) % (ulong)frames.Length);
+        AddSprite(frames[step], pos, height, 0.3f);
+    }
+
+    /// <summary>Adds a player border post at the given grid position.</summary>
+    public void AddBorder(Position pos, int height, int playerColor)
+    {
+        if (!borderImages.TryGetValue(playerColor, out var image))
+            return;
+
+        AddSprite(image, pos, height, 0.05f);
+    }
+
+    /// <summary>
+    /// Whether a map-file object byte is a tree. Tree objects are 68-80
+    /// (birch, elm, oak, ...) and 84 (small tree), see the original map
+    /// object types.
+    /// </summary>
+    public static bool IsTreeObject(byte mapObject)
+    {
+        return mapObject is >= 68 and <= 80 or 84;
     }
 
     /// <summary>Adds a selection marker (semi-transparent quad) at the given position.</summary>

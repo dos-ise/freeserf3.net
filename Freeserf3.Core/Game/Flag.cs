@@ -47,4 +47,27 @@ public sealed class Flag
     {
         return Queue.Count > 0 ? Queue.Dequeue() : null;
     }
+
+    /// <summary>Whether the queue holds the given material.</summary>
+    public bool Contains(Material material)
+    {
+        return Queue.Contains(material);
+    }
+
+    /// <summary>
+    /// Takes the first occurrence of the given material from the queue, or
+    /// null if it is not present.
+    /// </summary>
+    public Material? TakeGood(Material material)
+    {
+        if (!Queue.Contains(material))
+            return null;
+
+        var list = Queue.ToList();
+        list.Remove(material);
+        Queue.Clear();
+        foreach (var m in list)
+            Queue.Enqueue(m);
+        return material;
+    }
 }
