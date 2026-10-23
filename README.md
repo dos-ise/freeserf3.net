@@ -37,7 +37,7 @@ The game data can be obtained in two ways:
 
 - **M1** – Map viewer MVP: data loaders (GFX/MAP/SND), isometric terrain rendering on Windows & Android
 - **M1.5** – Ubisoft Connect download (Windows & Android)
-- **M2** – Game logic core (grid, buildings, settlers, pathfinding, resources)
+- **M2** – Game logic core: map data model & geometry, deterministic simulation (game/player/inventory), buildings & production chains, movables & transport (pathfinding, flags, roads), rendering integration (buildings/settlers/roads/flags, minimap), desktop interaction (select, build, road, flag) — **done**
 - **M3** – AI & extended logic (army/construction/economy, trading, missions)
 - **M4** – Full game (UI/menus, audio, multiplayer)
 
