@@ -49,6 +49,14 @@ public sealed class Serf : Movable
     /// <summary>Whether the settler carries a good.</summary>
     public bool IsCarrying => CarriedGood.HasValue;
 
+    /// <summary>Ticks per map cell walked (1 = one cell per tick).</summary>
+    public int MoveInterval { get; set; } = 1;
+
+    /// <summary>Ticks spent idle (used by the game to pause between walks).</summary>
+    public int IdleTicks { get; set; }
+
+    int moveCounter;
+
     /// <summary>Picks up a good.</summary>
     public void PickUp(Material material)
     {
@@ -66,7 +74,14 @@ public sealed class Serf : Movable
     /// <summary>Advances the settler by one tick.</summary>
     public override void Tick()
     {
-        if (State == MovableState.Walking)
-            WalkAlongPath();
+        if (State != MovableState.Walking)
+            return;
+
+        moveCounter++;
+        if (moveCounter < MoveInterval)
+            return;
+
+        moveCounter = 0;
+        WalkAlongPath();
     }
 }

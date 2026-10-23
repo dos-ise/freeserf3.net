@@ -255,6 +255,52 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void StartGameCreatesWalkingSettlers()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 2 });
+        map.Settlers.Add(new MapSettler { Party = 1, PosX = 3, PosY = 3 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        Assert.AreEqual(3, game.Settlers.Count);
+        Assert.AreEqual(new Position(1, 1), game.Settlers[0].Position);
+        Assert.AreEqual(0, game.Settlers[0].Player);
+        Assert.AreEqual(1, game.Settlers[2].Player);
+    }
+
+    [TestMethod]
+    public void SettlersWanderWhenIdle()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 8, PosY = 8 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var settler = game.Settlers[0];
+        Assert.AreEqual(MovableState.Idle, settler.State);
+
+        // After the idle pause the settler picks a walk target.
+        for (int i = 0; i < 40; i++)
+            game.TickOnce();
+
+        Assert.AreEqual(MovableState.Walking, settler.State);
+        Assert.IsNotNull(settler.Path);
+        Assert.IsTrue(settler.Path!.Count > 0);
+
+        // Walking advances the position.
+        var start = settler.Position;
+        for (int i = 0; i < 20; i++)
+            game.TickOnce();
+        Assert.AreNotEqual(start, settler.Position);
+    }
+
+    [TestMethod]
     public void LivingHouseGrowsPopulation()
     {
         var map = new Map(8);

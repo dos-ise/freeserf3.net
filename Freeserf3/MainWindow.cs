@@ -256,15 +256,27 @@ public sealed class MainWindow : IDisposable
             }
         }
 
-        // Settlers placed on the map. The animation frame follows the game
-        // clock (or wall time before the game starts).
+        // Settlers walking around the map. The animation frame follows the
+        // game clock (or wall time before the game starts).
         int frame = (int)((game?.Tick ?? (ulong)Environment.TickCount) / 10) % 8;
-        foreach (var settler in gameMap.Settlers)
+        if (game != null)
         {
-            var pos = new Position(settler.PosX, settler.PosY);
-            if (!gameMap.IsInBounds(pos))
-                continue;
-            gameObjects.AddMovable(pos, gameMap.GetCell(pos).Height, settler.Party, frame);
+            foreach (var settler in game.Settlers)
+            {
+                if (!gameMap.IsInBounds(settler.Position))
+                    continue;
+                gameObjects.AddMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame);
+            }
+        }
+        else
+        {
+            foreach (var settler in gameMap.Settlers)
+            {
+                var pos = new Position(settler.PosX, settler.PosY);
+                if (!gameMap.IsInBounds(pos))
+                    continue;
+                gameObjects.AddMovable(pos, gameMap.GetCell(pos).Height, settler.Party, frame);
+            }
         }
 
         // Carriers walking along the roads.

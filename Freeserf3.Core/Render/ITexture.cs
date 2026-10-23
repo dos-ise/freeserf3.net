@@ -20,20 +20,31 @@ public interface ITexture : IDisposable
 }
 
 /// <summary>A region of a texture atlas.</summary>
-public readonly struct TextureRegion
+public sealed class TextureRegion
 {
-    public float U0 { get; }
-    public float V0 { get; }
-    public float U1 { get; }
-    public float V1 { get; }
+    public int X { get; }
+    public int Y { get; }
+    public int Width { get; }
+    public int Height { get; }
 
-    public TextureRegion(float u0, float v0, float u1, float v1)
+    /// <summary>Current atlas size (updated when the atlas grows).</summary>
+    public int AtlasWidth { get; set; }
+    public int AtlasHeight { get; set; }
+
+    public TextureRegion(int x, int y, int width, int height, int atlasWidth, int atlasHeight)
     {
-        U0 = u0;
-        V0 = v0;
-        U1 = u1;
-        V1 = v1;
+        X = x;
+        Y = y;
+        Width = width;
+        Height = height;
+        AtlasWidth = atlasWidth;
+        AtlasHeight = atlasHeight;
     }
+
+    public float U0 => (float)X / AtlasWidth;
+    public float V0 => (float)Y / AtlasHeight;
+    public float U1 => (float)(X + Width) / AtlasWidth;
+    public float V1 => (float)(Y + Height) / AtlasHeight;
 }
 
 /// <summary>A texture atlas that packs images and provides UV regions.</summary>

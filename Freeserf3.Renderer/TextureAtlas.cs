@@ -24,6 +24,7 @@ public sealed class TextureAtlas : ITextureAtlas
     const int Padding = 1;
 
     readonly GL gl;
+    readonly List<TextureRegion> regions = new();
     Texture texture;
     byte[] pixels;
     int shelfX;
@@ -74,12 +75,9 @@ public sealed class TextureAtlas : ITextureAtlas
         // Upload only the changed region.
         texture.UpdateRegion(rgba, x, y, width, height);
 
-        float u0 = (float)x / texture.Width;
-        float v0 = (float)y / texture.Height;
-        float u1 = (float)(x + width) / texture.Width;
-        float v1 = (float)(y + height) / texture.Height;
-
-        return new TextureRegion(u0, v0, u1, v1);
+        var region = new TextureRegion(x, y, width, height, texture.Width, texture.Height);
+        regions.Add(region);
+        return region;
     }
 
     void Grow()
@@ -87,6 +85,8 @@ public sealed class TextureAtlas : ITextureAtlas
         int newSize = texture.Width * 2;
         if (newSize > MaxSize)
             throw new InvalidOperationException("Texture atlas exceeded maximum size.");
+
+        Console.WriteLine($"TextureAtlas: growing {texture.Width} -> {newSize}");
 
         var newPixels = new byte[newSize * newSize * 4];
         for (int row = 0; row < texture.Height; row++)
@@ -97,6 +97,14 @@ public sealed class TextureAtlas : ITextureAtlas
         pixels = newPixels;
         texture.Dispose();
         texture = new Texture(gl, newSize, newSize, pixels);
+
+        // The atlas size changed: update all existing regions so their UVs
+        // stay correct.
+        foreach (var region in regions)
+        {
+            region.AtlasWidth = newSize;
+            region.AtlasHeight = newSize;
+        }
     }
 
     public void Dispose()

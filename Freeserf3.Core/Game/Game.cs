@@ -44,6 +44,9 @@ public sealed class Game
     /// <summary>All buildings placed during play (not the map-file ones).</summary>
     public List<Building> Buildings { get; } = new();
 
+    /// <summary>The walking settlers (created from the map's settlers).</summary>
+    public List<Serf> Settlers { get; } = new();
+
     /// <summary>The transport network of each player (index = player index).</summary>
     public List<TransportNetwork> Networks { get; } = new();
 
@@ -80,6 +83,17 @@ public sealed class Game
         Buildings.Clear();
         Networks.Clear();
         IsWon = false;
+
+        // Create walking settlers from the map's settlers.
+        Settlers.Clear();
+        foreach (var mapSettler in Map.Settlers)
+        {
+            var serf = new Serf(mapSettler.Party, new Position(mapSettler.PosX, mapSettler.PosY), SerfType.Worker)
+            {
+                MoveInterval = 4
+            };
+            Settlers.Add(serf);
+        }
 
         foreach (var player in Players)
         {
@@ -161,6 +175,33 @@ public sealed class Game
     }
 
     /// <summary>
+    /// Gives the settler a random walk target nearby and sets the path.
+    /// Returns false if no reachable target was found.
+    /// </summary>
+    public bool Wander(Serf serf)
+    {
+        for (int attempt = 0; attempt < 12; attempt++)
+        {
+            int dx = Random.Next(-8, 9);
+            int dy = Random.Next(-8, 9);
+            if (dx == 0 && dy == 0)
+                continue;
+
+            var target = new Position(serf.Position.X + dx, serf.Position.Y + dy);
+            if (!Map.IsInBounds(target) || !IsWalkable(Map, target))
+                continue;
+
+            var path = Pathfinder.FindPath(Map, serf.Position, target, IsWalkable);
+            if (path != null && path.Count > 0)
+            {
+                serf.SetPath(path);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Advances the game by one tick. The clock is incremented and all
     /// buildings are simulated (construction, worker assignment and
     /// production); produced goods are queued at the building flags and
@@ -234,6 +275,22 @@ public sealed class Game
         // Carriers walk along the roads and move the goods.
         foreach (var network in Networks)
             network.Tick();
+
+        // Settlers wander around the map; after a short pause they pick a
+        // new walk target.
+        foreach (var settler in Settlers)
+        {
+            settler.Tick();
+            if (settler.State == MovableState.Idle)
+            {
+                settler.IdleTicks++;
+                if (settler.IdleTicks >= 30)
+                {
+                    settler.IdleTicks = 0;
+                    Wander(settler);
+                }
+            }
+        }
 
         // Living houses grow the population over time.
         if (Tick % 600 == 0)
