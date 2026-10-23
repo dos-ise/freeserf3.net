@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <RootNamespace>Freeserf3</RootNamespace>
+    <NeutralLanguage>en</NeutralLanguage>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.Input.Glfw" Version="2.23.0" />
+    <PackageReference Include="StbImageSharp" Version="2.30.16" />
+  </ItemGroup>
+
+</Project>

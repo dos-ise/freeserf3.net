@@ -1,0 +1,27 @@
+# Build results
+bin/
+obj/
+*.user
+
+# Game data (copyrighted, never committed)
+*.PA
+*.adf
+GameData/
+data/
+
+# IDE
+.vs/
+.idea/
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Android
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# OS
+Thumbs.db
+.DS_Store

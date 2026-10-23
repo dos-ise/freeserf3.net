@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="Freeserf3.Android/Freeserf3.Android.csproj" />
+  <Project Path="Freeserf3.Core/Freeserf3.Core.csproj" />
+  <Project Path="Freeserf3.Renderer/Freeserf3.Renderer.csproj" />
+  <Project Path="Freeserf3.Test/Freeserf3.Test.csproj" />
+  <Project Path="Freeserf3.Ubisoft/Freeserf3.Ubisoft.csproj" />
+  <Project Path="Freeserf3/Freeserf3.csproj" />
+  <Project Path="Silk.NET.Window/Silk.NET.Window.csproj" />
+</Solution>

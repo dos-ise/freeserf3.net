@@ -1,0 +1,17 @@
+<Project>
+
+  <!--
+    Version of freeserf3.net. Used by all projects: the desktop app, the Android app
+    (display version and version code) and the libraries.
+  -->
+  <PropertyGroup>
+    <Freeserf3VersionMajor>0</Freeserf3VersionMajor>
+    <Freeserf3VersionMinor>1</Freeserf3VersionMinor>
+    <Freeserf3VersionPatch>0</Freeserf3VersionPatch>
+
+    <Version>$(Freeserf3VersionMajor).$(Freeserf3VersionMinor).$(Freeserf3VersionPatch)</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+  </PropertyGroup>
+
+</Project>

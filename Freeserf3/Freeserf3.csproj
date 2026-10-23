@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <RootNamespace>Freeserf3</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Freeserf3.Core\Freeserf3.Core.csproj" />
+    <ProjectReference Include="..\Freeserf3.Renderer\Freeserf3.Renderer.csproj" />
+    <ProjectReference Include="..\Freeserf3.Ubisoft\Freeserf3.Ubisoft.csproj" />
+    <ProjectReference Include="..\Silk.NET.Window\Silk.NET.Window.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.Core" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.GLFW" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Input" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Input.Glfw" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.23.0" />
+  </ItemGroup>
+
+</Project>
