@@ -201,7 +201,7 @@ public class GameTests : DataTestBase
         game.StartGame();
 
         // Sawmill: 3 plank + 4 stone, trunk -> plank.
-        var building = game.PlaceBuilding(BuildingType.Sawmill, new Position(1, 1), 0);
+        var building = game.PlaceBuilding(BuildingType.Sawmill, new Position(4, 4), 0);
         for (int i = 0; i < 7; i++)
             game.TickOnce();
 
@@ -283,6 +283,53 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void IsWalkableRejectsBuildings()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Grass is walkable.
+        Assert.IsTrue(game.IsWalkable(map, new Position(4, 4)));
+
+        // Place a building; its 3x3 footprint blocks movement.
+        game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+        Assert.IsFalse(game.IsWalkable(map, new Position(4, 4)));
+        Assert.IsFalse(game.IsWalkable(map, new Position(3, 3)));
+        Assert.IsFalse(game.IsWalkable(map, new Position(5, 5)));
+        // Outside the footprint it is walkable again.
+        Assert.IsTrue(game.IsWalkable(map, new Position(2, 2)));
+        Assert.IsTrue(game.IsWalkable(map, new Position(6, 6)));
+    }
+
+    [TestMethod]
+    public void RoadPathAvoidsBuildings()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // A building in the middle of the map.
+        game.PlaceBuilding(BuildingType.Lumberjack, new Position(8, 8), 0);
+
+        // A road from (2,2) to (14,14) must not pass through the building.
+        var network = game.Networks[0];
+        var start = network.AddFlag(new Position(2, 2), 0);
+        var end = network.AddFlag(new Position(14, 14), 0);
+        var road = network.Connect(start, end, 0, game.IsWalkable);
+
+        Assert.IsNotNull(road);
+        foreach (var cell in road!.Path)
+        {
+            Assert.IsTrue(game.IsWalkable(map, cell), $"Road passes through blocked cell {cell}");
+        }
+    }
+
+    [TestMethod]
     public void PlaceBuildingCreatesCarrierRoad()
     {
         var map = new Map(8);
@@ -291,7 +338,7 @@ public class GameTests : DataTestBase
         var game = new Game(map, 42);
         game.StartGame();
 
-        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(1, 1), 0);
+        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
         var network = game.Networks[0];
 
         Assert.IsNotNull(building.Flag);
