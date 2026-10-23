@@ -56,6 +56,16 @@ public sealed class ControlPanel : IDisposable
     const int SubFoodInactive = 72, SubFoodActive = 84;
     const int SubMilitaryInactive = 75, SubMilitaryActive = 87;
     const int SubSocialInactive = 78, SubSocialActive = 90;
+    // Goods secondary tabs (STOCK, TOOLS, SPREAD, TRANSPORT).
+    const int SubStockInactive = 258, SubStockActive = 270;
+    const int SubToolsInactive = 261, SubToolsActive = 273;
+    const int SubSpreadInactive = 264, SubSpreadActive = 276;
+    const int SubTransportInactive = 267, SubTransportActive = 279;
+    // Settlers secondary tabs (STATISTIC, PROFESSION, WARRIORS, PRODUCTION).
+    const int SubStatisticInactive = 234, SubStatisticActive = 246;
+    const int SubProfessionInactive = 237, SubProfessionActive = 249;
+    const int SubWarriorsInactive = 240, SubWarriorsActive = 252;
+    const int SubProductionInactive = 243, SubProductionActive = 255;
     const int SystemInactive = 93, SystemActive = 96;
     const int LowerScrollInactive = 111, LowerScrollActive = 99;
     const int LowerSwordsInactive = 114, LowerSwordsActive = 102;
@@ -164,6 +174,8 @@ public sealed class ControlPanel : IDisposable
     TextureRegion minimapDeco = null!;
     readonly TextureRegion[] primaryTabs = new TextureRegion[6];
     readonly TextureRegion[] secondaryTabs = new TextureRegion[8];
+    readonly TextureRegion[] goodsTabs = new TextureRegion[8];
+    readonly TextureRegion[] settlerTabs = new TextureRegion[8];
     readonly TextureRegion[] systemButton = new TextureRegion[2];
     readonly TextureRegion[] lowerTabs = new TextureRegion[8];
     readonly TextureRegion[] labeledButton = new TextureRegion[2];
@@ -242,6 +254,18 @@ public sealed class ControlPanel : IDisposable
         AddButtonPair(secondaryTabs, 2, SubFoodInactive, SubFoodActive, buttons);
         AddButtonPair(secondaryTabs, 4, SubMilitaryInactive, SubMilitaryActive, buttons);
         AddButtonPair(secondaryTabs, 6, SubSocialInactive, SubSocialActive, buttons);
+
+        // Goods secondary tabs: stock, tools, spread, transport.
+        AddButtonPair(goodsTabs, 0, SubStockInactive, SubStockActive, buttons);
+        AddButtonPair(goodsTabs, 2, SubToolsInactive, SubToolsActive, buttons);
+        AddButtonPair(goodsTabs, 4, SubSpreadInactive, SubSpreadActive, buttons);
+        AddButtonPair(goodsTabs, 6, SubTransportInactive, SubTransportActive, buttons);
+
+        // Settlers secondary tabs: statistic, profession, warriors, production.
+        AddButtonPair(settlerTabs, 0, SubStatisticInactive, SubStatisticActive, buttons);
+        AddButtonPair(settlerTabs, 2, SubProfessionInactive, SubProfessionActive, buttons);
+        AddButtonPair(settlerTabs, 4, SubWarriorsInactive, SubWarriorsActive, buttons);
+        AddButtonPair(settlerTabs, 6, SubProductionInactive, SubProductionActive, buttons);
 
         // System (computer) button and lower tab bar.
         AddButtonPair(systemButton, 0, SystemInactive, SystemActive, buttons);
@@ -364,47 +388,18 @@ public sealed class ControlPanel : IDisposable
         }
         else if (primaryTab == 1)
         {
-            // Goods tab: the player's stock overview.
-            DrawGoodsPanel();
+            // Goods tab: stock, tools, spread, transport.
+            DrawSecondaryTabs(goodsTabs, () => DrawGoodsContent());
         }
         else if (primaryTab == 2)
         {
-            // Settlers tab: the population statistics.
-            DrawSettlersPanel();
+            // Settlers tab: statistic, profession, warriors, production.
+            DrawSecondaryTabs(settlerTabs, () => DrawSettlersContent());
         }
         else
         {
-            // Secondary tabs.
-            for (int i = 0; i < 4; i++)
-            {
-                int tab = i;
-                float x = SecondaryTabLeft + i * (SecondaryTabWidth + SecondaryTabSpacing);
-                float y = MiniMapHeight + 64f;
-                bool active = i == secondaryTab;
-                AddSprite(secondaryTabs[i * 2 + (active ? 1 : 0)], x, y, SecondaryTabWidth, SecondaryTabHeight);
-                AddClickRegion(x, y, SecondaryTabWidth, SecondaryTabHeight, () => SetSecondaryTab(tab));
-            }
-
-            // Building buttons in the content pane (2 columns x 6 rows).
-            var buildings = CurrentBuildings();
-            float cellWidth = ContentWidth / ContentColumns;
-            float cellHeight = ContentHeight / ContentRows;
-            for (int i = 0; i < buildings.Length; i++)
-            {
-                var (type, _) = buildings[i];
-                int col = i % ContentColumns;
-                int row = i / ContentColumns;
-                float x = ContentLeft + col * cellWidth;
-                float y = MiniMapHeight + ContentTop + row * cellHeight;
-
-                if (buildingIcons.TryGetValue(type, out var icon))
-                    AddCentered(icon, x, y, cellWidth, cellHeight);
-
-                if (type == selectedBuilding)
-                    AddCentered(activeMark, x, y, cellWidth, cellHeight);
-
-                AddClickRegion(x, y, cellWidth, cellHeight, () => SelectBuilding(type));
-            }
+            // Build tab: normal, food, military, social building buttons.
+            DrawSecondaryTabs(secondaryTabs, () => DrawBuildContent());
         }
 
         // System (computer) button toggles the in-game menu.
@@ -430,6 +425,73 @@ public sealed class ControlPanel : IDisposable
         3 => SocialBuildings,
         _ => NormalBuildings
     };
+
+    /// <summary>
+    /// Draws the four secondary tabs of the current primary tab and the
+    /// content below them.
+    /// </summary>
+    void DrawSecondaryTabs(TextureRegion[] tabs, Action drawContent)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            int tab = i;
+            float x = SecondaryTabLeft + i * (SecondaryTabWidth + SecondaryTabSpacing);
+            float y = MiniMapHeight + 64f;
+            bool active = i == secondaryTab;
+            AddSprite(tabs[i * 2 + (active ? 1 : 0)], x, y, SecondaryTabWidth, SecondaryTabHeight);
+            AddClickRegion(x, y, SecondaryTabWidth, SecondaryTabHeight, () => SetSecondaryTab(tab));
+        }
+
+        drawContent();
+    }
+
+    /// <summary>Draws the building buttons of the build tab.</summary>
+    void DrawBuildContent()
+    {
+        var buildings = CurrentBuildings();
+        float cellWidth = ContentWidth / ContentColumns;
+        float cellHeight = ContentHeight / ContentRows;
+        for (int i = 0; i < buildings.Length; i++)
+        {
+            var (type, _) = buildings[i];
+            int col = i % ContentColumns;
+            int row = i / ContentColumns;
+            float x = ContentLeft + col * cellWidth;
+            float y = MiniMapHeight + ContentTop + row * cellHeight;
+
+            if (buildingIcons.TryGetValue(type, out var icon))
+                AddCentered(icon, x, y, cellWidth, cellHeight);
+
+            if (type == selectedBuilding)
+                AddCentered(activeMark, x, y, cellWidth, cellHeight);
+
+            AddClickRegion(x, y, cellWidth, cellHeight, () => SelectBuilding(type));
+        }
+    }
+
+    /// <summary>Draws the goods tab content (stock, tools, spread, transport).</summary>
+    void DrawGoodsContent()
+    {
+        switch (secondaryTab)
+        {
+            case 1: DrawToolsContent(); break;
+            case 2: DrawSpreadContent(); break;
+            case 3: DrawTransportContent(); break;
+            default: DrawStockContent(); break;
+        }
+    }
+
+    /// <summary>Draws the settlers tab content (statistic, profession, warriors, production).</summary>
+    void DrawSettlersContent()
+    {
+        switch (secondaryTab)
+        {
+            case 1: DrawProfessionContent(); break;
+            case 2: DrawWarriorsContent(); break;
+            case 3: DrawProductionContent(); break;
+            default: DrawStatisticContent(); break;
+        }
+    }
 
     void SetPrimaryTab(int tab)
     {
@@ -490,11 +552,11 @@ public sealed class ControlPanel : IDisposable
     }
 
     /// <summary>
-    /// Draws the goods (stock) overview in the content area: the player's
-    /// inventory as a 6x6 grid of material icons with the amount below each
-    /// icon, following the settlers-remake MaterialInventoryLayout.
+    /// Draws the stock overview in the content area: the player's inventory
+    /// as a 6x6 grid of material icons with the amount below each icon,
+    /// following the settlers-remake MaterialInventoryLayout.
     /// </summary>
-    void DrawGoodsPanel()
+    void DrawStockContent()
     {
         float contentX = ContentLeft;
         float contentY = MiniMapHeight + ContentTop;
@@ -528,7 +590,7 @@ public sealed class ControlPanel : IDisposable
     /// workers, soldiers) as a simple list, following the settlers-remake
     /// SettlersStatisticsPanel idea.
     /// </summary>
-    void DrawSettlersPanel()
+    void DrawStatisticContent()
     {
         float contentX = ContentLeft;
         float contentY = MiniMapHeight + ContentTop;
@@ -571,6 +633,184 @@ public sealed class ControlPanel : IDisposable
         float rowH = contentH / (rows.Length + 1);
         DrawText("SETTLERS", contentX + 8f, contentY + 4f, 3f, 4f);
         for (int i = 0; i < rows.Length; i++)
+        {
+            float y = contentY + (i + 1) * rowH;
+            DrawText(rows[i].Label, contentX + 8f, y, 3f, 4f);
+            DrawText(rows[i].Value.ToString(), contentX + contentW - 8f - rows[i].Value.ToString().Length * 3f * 5f, y, 3f, 4f);
+        }
+    }
+
+    /// <summary>Draws the tools overview (all tools with their amounts).</summary>
+    void DrawToolsContent()
+    {
+        float contentX = ContentLeft;
+        float contentY = MiniMapHeight + ContentTop;
+        float contentW = ContentWidth;
+        float contentH = ContentHeight;
+
+        DrawText("TOOLS", contentX + 8f, contentY + 4f, 3f, 4f);
+        var tools = new (Material Material, string Label)[]
+        {
+            (Material.Hammer, "HAMMER"), (Material.Blade, "BLADE"), (Material.Pick, "PICK"),
+            (Material.Axe, "AXE"), (Material.Saw, "SAW"), (Material.Scythe, "SCYTHE"),
+            (Material.FishingRod, "ROD")
+        };
+        float rowH = contentH / (tools.Length + 1);
+        for (int i = 0; i < tools.Length; i++)
+        {
+            float y = contentY + (i + 1) * rowH;
+            DrawText(tools[i].Label, contentX + 8f, y, 3f, 4f);
+            int count = Player?.Inventory.Get(tools[i].Material) ?? 0;
+            DrawText(count.ToString(), contentX + contentW - 8f - count.ToString().Length * 3f * 5f, y, 3f, 4f);
+        }
+    }
+
+    /// <summary>Draws the goods spread overview (raw materials and food).</summary>
+    void DrawSpreadContent()
+    {
+        float contentX = ContentLeft;
+        float contentY = MiniMapHeight + ContentTop;
+        float contentW = ContentWidth;
+        float contentH = ContentHeight;
+
+        DrawText("SPREAD", contentX + 8f, contentY + 4f, 3f, 4f);
+        var goods = new (Material Material, string Label)[]
+        {
+            (Material.Plank, "PLANK"), (Material.Stone, "STONE"), (Material.Trunk, "TRUNK"),
+            (Material.Coal, "COAL"), (Material.IronOre, "ORE"), (Material.GoldOre, "GOLDORE"),
+            (Material.Iron, "IRON"), (Material.Gold, "GOLD"), (Material.Bread, "BREAD"),
+            (Material.Fish, "FISH"), (Material.Meat, "MEAT"), (Material.Crop, "CROP")
+        };
+        float rowH = contentH / (goods.Length + 1);
+        for (int i = 0; i < goods.Length; i++)
+        {
+            float y = contentY + (i + 1) * rowH;
+            DrawText(goods[i].Label, contentX + 8f, y, 3f, 4f);
+            int count = Player?.Inventory.Get(goods[i].Material) ?? 0;
+            DrawText(count.ToString(), contentX + contentW - 8f - count.ToString().Length * 3f * 5f, y, 3f, 4f);
+        }
+    }
+
+    /// <summary>Draws the transport overview (goods in transit).</summary>
+    void DrawTransportContent()
+    {
+        float contentX = ContentLeft;
+        float contentY = MiniMapHeight + ContentTop;
+        float contentW = ContentWidth;
+        float contentH = ContentHeight;
+
+        DrawText("TRANSPORT", contentX + 8f, contentY + 4f, 3f, 4f);
+        int carriers = 0, flags = 0, roads = 0;
+        if (Game != null)
+        {
+            carriers = Game.Carriers.Count();
+            foreach (var network in Game.Networks)
+            {
+                flags += network.Flags.Count;
+                roads += network.Roads.Count;
+            }
+        }
+        var rows = new (string Label, int Value)[]
+        {
+            ("CARRIERS", carriers),
+            ("FLAGS", flags),
+            ("ROADS", roads)
+        };
+        float rowH = contentH / (rows.Length + 1);
+        for (int i = 0; i < rows.Length; i++)
+        {
+            float y = contentY + (i + 1) * rowH;
+            DrawText(rows[i].Label, contentX + 8f, y, 3f, 4f);
+            DrawText(rows[i].Value.ToString(), contentX + contentW - 8f - rows[i].Value.ToString().Length * 3f * 5f, y, 3f, 4f);
+        }
+    }
+
+    /// <summary>Draws the profession overview (workers by profession).</summary>
+    void DrawProfessionContent()
+    {
+        float contentX = ContentLeft;
+        float contentY = MiniMapHeight + ContentTop;
+        float contentW = ContentWidth;
+        float contentH = ContentHeight;
+
+        DrawText("PROFESSIONS", contentX + 8f, contentY + 4f, 3f, 4f);
+        var professions = new Dictionary<WorkerType, int>();
+        if (Game != null)
+        {
+            foreach (var building in Game.Buildings)
+            {
+                if (building.Player != (Player?.Index ?? 0))
+                    continue;
+                if (building.Worker == WorkerType.None)
+                    continue;
+                professions[building.Worker] = professions.GetValueOrDefault(building.Worker) + 1;
+            }
+        }
+        var rows = professions.OrderByDescending(p => p.Value).Take(10).ToList();
+        float rowH = contentH / (rows.Count + 1);
+        for (int i = 0; i < rows.Count; i++)
+        {
+            float y = contentY + (i + 1) * rowH;
+            DrawText(rows[i].Key.ToString().ToUpperInvariant(), contentX + 8f, y, 3f, 4f);
+            DrawText(rows[i].Value.ToString(), contentX + contentW - 8f - rows[i].Value.ToString().Length * 3f * 5f, y, 3f, 4f);
+        }
+    }
+
+    /// <summary>Draws the warriors overview (soldiers by weapon).</summary>
+    void DrawWarriorsContent()
+    {
+        float contentX = ContentLeft;
+        float contentY = MiniMapHeight + ContentTop;
+        float contentW = ContentWidth;
+        float contentH = ContentHeight;
+
+        DrawText("WARRIORS", contentX + 8f, contentY + 4f, 3f, 4f);
+        int soldiers = 0;
+        if (Game != null)
+            soldiers = Game.Settlers.Count(s => s.Player == (Player?.Index ?? 0) && s.Type == SerfType.Soldier);
+        var rows = new (string Label, int Value)[]
+        {
+            ("SOLDIERS", soldiers),
+            ("SWORDS", Player?.Inventory.Get(Material.Sword) ?? 0),
+            ("BOWS", Player?.Inventory.Get(Material.Bow) ?? 0),
+            ("SPEARS", Player?.Inventory.Get(Material.Spear) ?? 0)
+        };
+        float rowH = contentH / (rows.Length + 1);
+        for (int i = 0; i < rows.Length; i++)
+        {
+            float y = contentY + (i + 1) * rowH;
+            DrawText(rows[i].Label, contentX + 8f, y, 3f, 4f);
+            DrawText(rows[i].Value.ToString(), contentX + contentW - 8f - rows[i].Value.ToString().Length * 3f * 5f, y, 3f, 4f);
+        }
+    }
+
+    /// <summary>Draws the production overview (active producers and their output).</summary>
+    void DrawProductionContent()
+    {
+        float contentX = ContentLeft;
+        float contentY = MiniMapHeight + ContentTop;
+        float contentW = ContentWidth;
+        float contentH = ContentHeight;
+
+        DrawText("PRODUCTION", contentX + 8f, contentY + 4f, 3f, 4f);
+        var rows = new List<(string Label, int Value)>();
+        if (Game != null)
+        {
+            foreach (var building in Game.Buildings)
+            {
+                if (building.Player != (Player?.Index ?? 0))
+                    continue;
+                if (building.State != BuildingState.Active)
+                    continue;
+                if (!building.Definition.IsProducer)
+                    continue;
+                rows.Add((building.Type.ToString().ToUpperInvariant(), building.Output.TotalCount));
+            }
+        }
+        if (rows.Count == 0)
+            rows.Add(("NONE", 0));
+        float rowH = contentH / (rows.Count + 1);
+        for (int i = 0; i < rows.Count; i++)
         {
             float y = contentY + (i + 1) * rowH;
             DrawText(rows[i].Label, contentX + 8f, y, 3f, 4f);
