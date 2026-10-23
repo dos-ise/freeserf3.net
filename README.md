@@ -5,6 +5,20 @@ targeting **Windows** and **Android**. Inspired by [freeserf.net](https://github
 (Settlers 1) and the reference projects [settlers-remake](https://github.com/paulwedeck/settlers-remake)
 (Java) and [X-Settlers](https://github.com/Skarmux/X-Settlers) (C++).
 
+## References
+
+The following reference projects are used for porting game logic, data formats and rendering:
+
+| Project | Role | Local path |
+| --- | --- | --- |
+| **settlers-remake (new)** | **Primary reference** – most developed branch; use for all ports | `C:\Users\ostermann_d\Downloads\settler3\settlers-remake-master_new` |
+| settlers-remake (old) | Secondary reference (older branch) | `C:\Users\ostermann_d\Downloads\settler3\settlers-remake` |
+| X-Settlers | C++ reference (original game rendering) | `C:\Users\ostermann_d\Downloads\settler3\x-settlers` |
+| freeserf.net | C# architecture reference (Settlers 1) | `C:\git\copilot-worktrees\freeserf.net` |
+
+> **Note:** `settlers-remake-master_new` is significantly more developed than the older
+> `settlers-remake` branch and is the **primary reference** for all future porting work.
+
 ## License
 
 GPL v3. The Ubisoft Connect download code is ported from freeserf.net (GPL v3).

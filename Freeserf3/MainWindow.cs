@@ -141,9 +141,9 @@ public sealed class MainWindow : IDisposable
         gameMap = Freeserf3.Simulation.Map.FromReader(map);
 
         // Center the camera on the map. The map's screen-space bounding box
-        // is x: [-(size-1)*8, (size-1)*16], y: [0, (size-1)*16].
+        // is x: [-(size-1)*8, (size-1)*16], y: [0, (size-1)*9].
         int size = map.WidthHeight;
-        cameraOffset = new Vector2(-(size - 1) * 4f, -(size - 1) * 8f);
+        cameraOffset = new Vector2(-(size - 1) * 4f, -(size - 1) * 4.5f);
 
         Console.WriteLine("Controls: drag=pan, wheel=zoom, B=build, R=road, F=flag, T=next building, right-click=cancel, Esc=close");
 
@@ -200,6 +200,16 @@ public sealed class MainWindow : IDisposable
             if (!gameMap.IsInBounds(pos))
                 continue;
             gameObjects.AddBuilding(type, pos, gameMap.GetCell(pos).Height);
+        }
+
+        // Settlers placed on the map.
+        int frame = (int)(Environment.TickCount / 150) % 8;
+        foreach (var settler in gameMap.Settlers)
+        {
+            var pos = new Position(settler.PosX, settler.PosY);
+            if (!gameMap.IsInBounds(pos))
+                continue;
+            gameObjects.AddMovable(pos, gameMap.GetCell(pos).Height, frame);
         }
 
         // Roads and flags from the cell state.

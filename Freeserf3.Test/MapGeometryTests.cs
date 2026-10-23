@@ -128,9 +128,9 @@ public class MapGeometryTests
         var pos = new Position(4, 7);
         var (x, y) = MapGeometry.GridToScreen(pos);
 
-        // screenX = 16x - 8y, screenY = 16y
+        // screenX = 16x - 8y, screenY = 9y
         Assert.AreEqual(4 * 16f - 7 * 8f, x, 0.001f);
-        Assert.AreEqual(7 * 16f, y, 0.001f);
+        Assert.AreEqual(7 * 9f, y, 0.001f);
 
         var back = MapGeometry.ScreenToGrid(x, y);
         Assert.AreEqual(pos, back);
@@ -141,6 +141,6 @@ public class MapGeometryTests
     {
         var pos = new Position(2, 3);
         var (x, y) = MapGeometry.GridToScreen(pos, height: 5f);
-        Assert.AreEqual(3 * 16f - 5 * 2f, y, 0.001f);
+        Assert.AreEqual(3 * 9f - 5 * 2f, y, 0.001f);
     }
 }

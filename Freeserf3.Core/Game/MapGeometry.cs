@@ -64,7 +64,7 @@ public static class MapGeometry
 
     // Screen-space constants (from the terrain renderer / settlers-remake).
     public const float TileWidth = 16f;
-    public const float TileHeight = 16f;
+    public const float TileHeight = 9f;
     public const float HeightScale = 2f;
 
     /// <summary>Returns the neighbour of <paramref name="pos"/> in the given direction.</summary>

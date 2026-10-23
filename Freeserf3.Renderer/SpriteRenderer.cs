@@ -59,6 +59,11 @@ public sealed class SpriteRenderer : IDisposable
         this.gl = gl;
         shader = CreateShader(gl);
 
+        // Sprites have transparent areas (alpha=0 with black RGB); enable
+        // alpha blending so they are not drawn as black boxes.
+        gl.Enable(EnableCap.Blend);
+        gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+
         vao = gl.GenVertexArray();
         vbo = gl.GenBuffer();
 

@@ -24,7 +24,6 @@ public sealed class TerrainRenderer : IDisposable
     // Hex grid geometry (from settlers-remake DrawConstants).
     const float DistanceX = 16f;
     const float DistanceY = 9f;
-    const float TextureUnitY = 16f;
     const float HeightScale = 2f;
 
     // Texture coordinates (normalized within a 32x32 tile) for the two
@@ -211,7 +210,6 @@ public sealed class TerrainRenderer : IDisposable
         shader.SetUniform1("uZoom", zoom);
         shader.SetUniform1("uDistanceX", DistanceX);
         shader.SetUniform1("uDistanceY", DistanceY);
-        shader.SetUniform1("uTextureUnitY", TextureUnitY);
         shader.SetUniform1("uHeightScale", HeightScale);
 
         atlas.Texture.Bind(0);
@@ -241,7 +239,6 @@ uniform mat4 uViewProjection;
 uniform float uZoom;
 uniform float uDistanceX;
 uniform float uDistanceY;
-uniform float uTextureUnitY;
 uniform float uHeightScale;
 
 out vec2 vUv;
@@ -250,7 +247,7 @@ out float vColor;
 void main()
 {{
     float screenX = aPosition.x * uDistanceX - aPosition.y * uDistanceX / 2.0;
-    float screenY = aPosition.y * uTextureUnitY - aPosition.z * uHeightScale;
+    float screenY = aPosition.y * uDistanceY - aPosition.z * uHeightScale;
     vec4 pos = vec4(screenX * uZoom, screenY * uZoom, 0.0, 1.0);
     gl_Position = uViewProjection * pos;
     vUv = aUv;

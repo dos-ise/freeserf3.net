@@ -182,7 +182,7 @@ public class MainActivity : SilkActivity
             minimap = new Minimap(State.Gl, gameMap);
 
             int size = map.WidthHeight;
-            cameraOffset = new Vector2(-(size - 1) * 4f, -(size - 1) * 8f);
+            cameraOffset = new Vector2(-(size - 1) * 4f, -(size - 1) * 4.5f);
 
             State.Gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             Log.Debug(Tag, $"Framebuffer size: {view.FramebufferSize.X}x{view.FramebufferSize.Y}");
@@ -246,6 +246,16 @@ public class MainActivity : SilkActivity
 
             int height = gameMap.GetCell(x, y).Height;
             gameObjects.AddBuilding(type.Value, new Position(x, y), height);
+        }
+
+        // Settlers placed on the map.
+        int frame = (int)(System.Environment.TickCount / 150) % 8;
+        foreach (var settler in gameMap.Settlers)
+        {
+            var pos = new Position(settler.PosX, settler.PosY);
+            if (!gameMap.IsInBounds(pos))
+                continue;
+            gameObjects.AddMovable(pos, gameMap.GetCell(pos).Height, frame);
         }
 
         for (int y = 0; y < size; y++)
