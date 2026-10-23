@@ -42,7 +42,6 @@ public sealed class MainWindow : IDisposable
     TerrainRenderer? terrain;
     GameObjectRenderer? gameObjects;
     Minimap? minimap;
-    HudRenderer? hud;
     ControlPanel? controlPanel;
     MapFileReader? map;
     Freeserf3.Simulation.Map? gameMap;
@@ -149,7 +148,6 @@ public sealed class MainWindow : IDisposable
 
         minimap = new Minimap(State.Gl, Freeserf3.Simulation.Map.FromReader(map));
         gameMap = Freeserf3.Simulation.Map.FromReader(map);
-        hud = new HudRenderer(State.Gl);
 
         // Left-side control panel (building selection, system button).
         controlPanel = new ControlPanel(State.Gl);
@@ -205,36 +203,13 @@ public sealed class MainWindow : IDisposable
         if (controlPanel != null)
         {
             var (mx, my, mw, mh) = controlPanel.GetMiniMapRect(window.Size.X, window.Size.Y);
-            minimap?.Draw(mx, my, mw, mh);
+            minimap?.Draw(mx, my, mw, mh, window.Size.X, window.Size.Y);
             controlPanel.Draw(window.Size.X, window.Size.Y);
         }
         else
         {
-            minimap?.Draw(0f, 0f, 160f, 160f);
+            minimap?.Draw(0f, 0f, 160f, 160f, window.Size.X, window.Size.Y);
         }
-        hud?.Draw(window.Size.X, window.Size.Y, BuildHudLines());
-    }
-
-    /// <summary>Builds the HUD text lines (resources, population, menu).</summary>
-    List<string> BuildHudLines()
-    {
-        var lines = new List<string>();
-        if (game == null)
-            return lines;
-
-        var player = game.GetPlayer(0);
-        if (player == null)
-            return lines;
-
-        lines.Add($"POP {player.Population}/{game.TargetPopulation}  FREE {player.FreeSettlers}");
-        lines.Add($"PLANK {player.Inventory.Get(Material.Plank)}  STONE {player.Inventory.Get(Material.Stone)}");
-        lines.Add($"TRUNK {player.Inventory.Get(Material.Trunk)}  BREAD {player.Inventory.Get(Material.Bread)}");
-        lines.Add($"BUILD: {buildType}  MODE: {mode}");
-
-        if (game.IsWon)
-            lines.Add("YOU WIN! POPULATION TARGET REACHED");
-
-        return lines;
     }
 
     /// <summary>Collects the sprites of the game objects for the current frame.</summary>

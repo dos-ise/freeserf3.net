@@ -229,9 +229,9 @@ public sealed class ControlPanel : IDisposable
     public (float X, float Y, float Width, float Height) GetMiniMapRect(int screenWidth, int screenHeight)
     {
         UpdateScale(screenHeight);
-        // The minimap is a square centered in the decoration frame, kept
-        // clearly smaller than the frame so the wooden border stays visible.
-        const float mapSize = 100f;
+        // The minimap is a square centered in the decoration frame, sized
+        // like the original game (fills most of the 216x224 frame).
+        const float mapSize = 200f;
         float x = (PanelWidth - mapSize) / 2f;
         float y = (MiniMapHeight - mapSize) / 2f;
         return (x * scale, y * scale, mapSize * scale, mapSize * scale);

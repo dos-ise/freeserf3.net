@@ -96,7 +96,7 @@ public sealed class Minimap : IDisposable
     }
 
     /// <summary>Draws the minimap inside the given screen rectangle.</summary>
-    public void Draw(float x, float y, float width, float height)
+    public void Draw(float x, float y, float width, float height, int screenWidth, int screenHeight)
     {
         float x0 = x;
         float y0 = y;
@@ -118,7 +118,7 @@ public sealed class Minimap : IDisposable
         gl.BufferData(BufferTargetARB.ArrayBuffer, vertices, BufferUsageARB.DynamicDraw);
 
         shader.Use();
-        shader.SetUniformMatrix4("uProjection", Matrix4x4.CreateOrthographicOffCenter(0, x1, y1, 0, -1, 1));
+        shader.SetUniformMatrix4("uProjection", Matrix4x4.CreateOrthographicOffCenter(0, screenWidth, screenHeight, 0, -1, 1));
 
         texture.Bind(0);
         shader.SetUniform1("uTexture", 0);
