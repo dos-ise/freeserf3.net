@@ -1,9 +1,9 @@
-/*
+﻿/*
  * MapTests.cs - Tests for the game map and the map modifier
  */
 
 using Freeserf3.Data;
-using Freeserf3.Game;
+using Freeserf3.Simulation;
 
 namespace Freeserf3.Test;
 
@@ -77,10 +77,10 @@ public class MapTests : DataTestBase
         var map = new Map(4);
         var positions = map.AllPositions().ToList();
 
-        Assert.AreEqual(16, positions.Count);
-        Assert.IsTrue(positions.Contains(new Position(0, 0)));
-        Assert.IsTrue(positions.Contains(new Position(3, 3)));
-        Assert.AreEqual(16, positions.Distinct().Count());
+        Assert.HasCount(16, positions);
+        Assert.Contains(new Position(0, 0), positions);
+        Assert.Contains(new Position(3, 3), positions);
+        Assert.HasCount(16, positions.Distinct());
     }
 
     [TestMethod]
@@ -168,9 +168,9 @@ public class MapTests : DataTestBase
 
         Assert.AreEqual(reader.WidthHeight, map.Size);
         Assert.AreEqual(reader.PlayerCount, map.PlayerCount);
-        Assert.AreEqual(reader.Buildings.Count, map.Buildings.Count);
-        Assert.AreEqual(reader.Settlers.Count, map.Settlers.Count);
-        Assert.AreEqual(reader.Stacks.Count, map.Stacks.Count);
+        Assert.HasCount(reader.Buildings.Count, map.Buildings);
+        Assert.HasCount(reader.Settlers.Count, map.Settlers);
+        Assert.HasCount(reader.Stacks.Count, map.Stacks);
 
         // Spot-check a cell against the raw reader data.
         var pos = new Position(0, 0);

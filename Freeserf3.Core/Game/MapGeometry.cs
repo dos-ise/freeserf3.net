@@ -1,4 +1,4 @@
-/*
+﻿/*
  * MapGeometry.cs - Hex grid geometry for the Settlers 3 map
  *
  * Ported from settlers-remake (MIT): EDirection.java and ShortPoint2D.java.
@@ -19,7 +19,7 @@
  * (at your option) any later version.
  */
 
-namespace Freeserf3.Game;
+namespace Freeserf3.Simulation;
 
 /// <summary>The six movement directions on the hex grid.</summary>
 public enum Direction

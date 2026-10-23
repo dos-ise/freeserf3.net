@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Map.cs - The game map with full per-cell state
  *
  * The Map wraps the terrain data loaded by MapFileReader and adds the
@@ -13,7 +13,7 @@
 
 using Freeserf3.Data;
 
-namespace Freeserf3.Game;
+namespace Freeserf3.Simulation;
 
 /// <summary>State of a road on a map cell.</summary>
 public enum RoadState : byte

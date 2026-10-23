@@ -1,8 +1,8 @@
-/*
+﻿/*
  * MapGeometryTests.cs - Tests for the hex grid geometry
  */
 
-using Freeserf3.Game;
+using Freeserf3.Simulation;
 
 namespace Freeserf3.Test;
 
@@ -118,7 +118,7 @@ public class MapGeometryTests
 
         // Moving in the approximate direction must reduce the distance.
         var next = start.GetNeighbor(dir);
-        Assert.IsTrue(next.GetDistanceTo(end) < start.GetDistanceTo(end));
+        Assert.IsLessThan(next.GetDistanceTo(end), start.GetDistanceTo(end));
     }
 
     [TestMethod]

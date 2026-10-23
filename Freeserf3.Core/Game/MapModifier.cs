@@ -1,4 +1,4 @@
-/*
+﻿/*
  * MapModifier.cs - Terrain and object modification on the game map
  *
  * All changes go through the MapModifier so that the map can later notify
@@ -10,7 +10,7 @@
  * (at your option) any later version.
  */
 
-namespace Freeserf3.Game;
+namespace Freeserf3.Simulation;
 
 /// <summary>
 /// Provides operations to change the terrain and objects of a map:
