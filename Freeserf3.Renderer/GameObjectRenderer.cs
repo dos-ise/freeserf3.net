@@ -489,6 +489,24 @@ public sealed class GameObjectRenderer : IDisposable
     }
 
     /// <summary>
+    /// Adds a semi-transparent building preview (ghost) at the given
+    /// position. Green when the placement is valid, red otherwise.
+    /// </summary>
+    public void AddBuildingGhost(BuildingType type, Position pos, int height, bool valid)
+    {
+        if (!BuildingSequences.TryGetValue(type, out int sequence))
+            return;
+        if (!buildingImages.TryGetValue(sequence, out var image))
+            return;
+
+        var (mapX, mapY) = MapGeometry.GridToScreen(pos, height);
+        float x = mapX + image.OffsetX;
+        float y = mapY + image.OffsetY;
+        var color = valid ? new Vector4(0.3f, 1f, 0.3f, 0.5f) : new Vector4(1f, 0.3f, 0.3f, 0.5f);
+        sprites.Add(new Sprite(image.Region, x, y, image.Width, image.Height, 0.2f, color));
+    }
+
+    /// <summary>
     /// Adds a settler sprite at the given position. <paramref name="frame"/>
     /// selects the walking animation step (0-10) and <paramref name="direction"/>
     /// the facing direction of the walking sequence.

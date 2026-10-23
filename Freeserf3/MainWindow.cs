@@ -128,6 +128,8 @@ public sealed class MainWindow : IDisposable
 
     void OnMouseMove(IMouse mouse, Vector2 position)
     {
+        gameView?.SetMousePosition(position);
+
         if (dragging)
         {
             var delta = new Vector2(position.X, position.Y) - lastMouse;

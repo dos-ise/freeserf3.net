@@ -199,6 +199,7 @@ public class MainActivity : SilkActivity
                     lastTouch = touchDown;
                     break;
                 case MotionEventActions.Move:
+                    gameView.SetMousePosition(new Vector2(x, y));
                     if (dragging)
                     {
                         var delta = new Vector2(x, y) - lastTouch;

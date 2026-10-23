@@ -59,6 +59,7 @@ public sealed class GameView : IDisposable
     InteractionMode mode = InteractionMode.Select;
     BuildingType buildType = BuildingType.Lumberjack;
     Position? selected;
+    Vector2? mousePosition;
 
     public GameView(GameData gameData, Action<string>? log = null)
     {
@@ -203,6 +204,15 @@ public sealed class GameView : IDisposable
         {
             gameObjects.Begin();
             CollectGameObjects();
+
+            // Building preview (ghost) while in build mode.
+            if (mode == InteractionMode.Build && mousePosition is Vector2 mouse && gameMap != null)
+            {
+                var pos = MouseToGrid(mouse, screenWidth, screenHeight);
+                if (gameMap.IsInBounds(pos))
+                    gameObjects.AddBuildingGhost(buildType, pos, gameMap.GetCell(pos).Height, CanPlaceBuilding(pos));
+            }
+
             gameObjects.Draw(viewProjection, zoom);
         }
 
@@ -222,6 +232,12 @@ public sealed class GameView : IDisposable
     public void Zoom(float factor)
     {
         zoom = Math.Clamp(zoom * factor, 0.1f, 10.0f);
+    }
+
+    /// <summary>Updates the pointer position (used for the building preview).</summary>
+    public void SetMousePosition(Vector2 position)
+    {
+        mousePosition = position;
     }
 
     /// <summary>
@@ -626,19 +642,27 @@ public sealed class GameView : IDisposable
         if (gameMap == null || game == null)
             return;
 
-        // Do not place on water or on an existing building.
-        var cell = gameMap.GetCell(pos);
-        var landscape = LandscapeMapping.FromMapValue(cell.Landscape);
-        if (landscape is LandscapeType.Water1 or LandscapeType.Water2 or LandscapeType.Water3
-            or LandscapeType.Water4 or LandscapeType.Water5 or LandscapeType.Water6
-            or LandscapeType.Water7 or LandscapeType.Water8)
+        if (!CanPlaceBuilding(pos))
         {
-            log("Cannot build on water.");
+            log("Cannot build here.");
             return;
         }
 
         var building = game.PlaceBuilding(buildType, pos, 0);
         log($"Placed {building.Type} at {pos} ({building.State})");
+    }
+
+    /// <summary>
+    /// Whether a building can be placed at the given position: in bounds,
+    /// not on water and not inside an existing building footprint.
+    /// </summary>
+    bool CanPlaceBuilding(Position pos)
+    {
+        if (gameMap == null || game == null)
+            return false;
+        if (!gameMap.IsInBounds(pos))
+            return false;
+        return game.IsWalkable(gameMap, pos);
     }
 
     /// <summary>Places a road cell at the given position.</summary>
