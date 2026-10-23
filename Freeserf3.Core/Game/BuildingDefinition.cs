@@ -31,6 +31,7 @@ public sealed class BuildingDefinition
         int workRadius = 0,
         bool isMilitary = false,
         bool isLivinghouse = false,
+        bool isResourceProducer = false,
         int productionTime = DefaultProductionTime)
     {
         Type = type;
@@ -42,6 +43,7 @@ public sealed class BuildingDefinition
         WorkRadius = workRadius;
         IsMilitary = isMilitary;
         IsLivinghouse = isLivinghouse;
+        IsResourceProducer = isResourceProducer;
         ProductionTime = productionTime;
     }
 
@@ -54,6 +56,12 @@ public sealed class BuildingDefinition
     public int WorkRadius { get; }
     public bool IsMilitary { get; }
     public bool IsLivinghouse { get; }
+
+    /// <summary>
+    /// Whether the building gathers a map resource (trees, stones) instead
+    /// of producing from material inputs. Its worker drives the production.
+    /// </summary>
+    public bool IsResourceProducer { get; }
     public int ProductionTime { get; }
 
     /// <summary>Total number of construction materials needed.</summary>
@@ -116,7 +124,7 @@ public sealed class BuildingDefinition
         // --- Raw material production ---
         Add(new BuildingDefinition(BuildingType.Stonecutter, WorkerType.Stonecutter,
             new[] { (Material.Plank, 2), (Material.Stone, 3) },
-            output: Material.Stone, workRadius: 20, productionTime: 900));
+            output: Material.Stone, workRadius: 20, isResourceProducer: true, productionTime: 900));
 
         Add(new BuildingDefinition(BuildingType.Forester, WorkerType.Forester,
             new[] { (Material.Stone, 1), (Material.Plank, 3) },
@@ -124,7 +132,7 @@ public sealed class BuildingDefinition
 
         Add(new BuildingDefinition(BuildingType.Lumberjack, WorkerType.Lumberjack,
             new[] { (Material.Stone, 2), (Material.Plank, 2) },
-            output: Material.Trunk, workRadius: 30, productionTime: 900));
+            output: Material.Trunk, workRadius: 30, isResourceProducer: true, productionTime: 900));
 
         Add(new BuildingDefinition(BuildingType.Sawmill, WorkerType.Sawmiller,
             new[] { (Material.Plank, 3), (Material.Stone, 4) },

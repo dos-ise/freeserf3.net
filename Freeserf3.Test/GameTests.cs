@@ -219,6 +219,98 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void StartGameTracksTreesAndStones()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        SetGrass(map);
+        var cell = map.GetCell(2, 2);
+        cell.MapObject = 68; // birch tree
+        map.SetCell(2, 2, cell);
+        cell = map.GetCell(3, 3);
+        cell.MapObject = 1; // big stone
+        map.SetCell(3, 3, cell);
+
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        Assert.IsTrue(game.Trees.Contains(new Position(2, 2)));
+        Assert.IsTrue(game.Stones.Contains(new Position(3, 3)));
+        Assert.IsFalse(game.Trees.Contains(new Position(3, 3)));
+    }
+
+    [TestMethod]
+    public void FindNearestResourceRespectsRadius()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        game.Trees.Add(new Position(5, 5));
+        game.Trees.Add(new Position(9, 9));
+
+        Assert.AreEqual(new Position(5, 5), game.FindNearestTree(new Position(4, 4), 3));
+        Assert.IsNull(game.FindNearestTree(new Position(4, 4), 0));
+
+        game.Stones.Add(new Position(6, 6));
+        Assert.AreEqual(new Position(6, 6), game.FindNearestStone(new Position(4, 4), 3));
+    }
+
+    [TestMethod]
+    public void LumberjackCutsTreeAndProducesTrunk()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Add a tree near the building.
+        var treePos = new Position(6, 6);
+        game.Trees.Add(treePos);
+        var cell = map.GetCell(treePos);
+        cell.MapObject = 68; // birch tree
+        map.SetCell(treePos, cell);
+
+        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+        for (int i = 0; i < 5000 && game.Trees.Contains(treePos); i++)
+            game.TickOnce();
+
+        Assert.IsFalse(game.Trees.Contains(treePos), "Tree should have been cut down");
+        Assert.IsTrue(building.Output.Get(Material.Trunk) > 0, "Lumberjack should have produced a trunk");
+    }
+
+    [TestMethod]
+    public void StonecutterMinesStoneAndProducesStone()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Add a stone near the building.
+        var stonePos = new Position(6, 6);
+        game.Stones.Add(stonePos);
+        var cell = map.GetCell(stonePos);
+        cell.MapObject = 1; // big stone
+        map.SetCell(stonePos, cell);
+
+        var building = game.PlaceBuilding(BuildingType.Stonecutter, new Position(4, 4), 0);
+        for (int i = 0; i < 5000 && game.Stones.Contains(stonePos); i++)
+            game.TickOnce();
+
+        Assert.IsFalse(game.Stones.Contains(stonePos), "Stone should have been mined");
+        Assert.IsTrue(building.Output.Get(Material.Stone) > 0, "Stonecutter should have produced stone");
+    }
+
+    [TestMethod]
     public void ProductionTransfersToPlayerInventory()
     {
         var map = new Map(8);

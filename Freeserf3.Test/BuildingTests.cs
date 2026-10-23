@@ -263,16 +263,9 @@ public class BuildingTests
         sawmill.AddConstructionProgress(100);
         sawmill.AssignWorker(WorkerType.Sawmiller);
 
-        // Run the lumberjack until it produced a trunk, then feed the sawmill.
-        int ticks = 0;
-        while (lumberjack.Output.Get(Material.Trunk) == 0 && ticks < 10000)
-        {
-            lumberjack.Tick();
-            ticks++;
-        }
-
+        // The lumberjack produces a trunk when its worker cuts a tree.
+        lumberjack.ProduceResource();
         Assert.AreEqual(1, lumberjack.Output.Get(Material.Trunk));
-        Assert.IsTrue(ticks <= lumberjack.Definition.ProductionTime);
 
         sawmill.Input.Add(Material.Trunk, 1);
         for (int i = 0; i < sawmill.Definition.ProductionTime; i++)

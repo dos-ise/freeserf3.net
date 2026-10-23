@@ -56,6 +56,15 @@ public sealed class Game
     /// <summary>The settlers that build the construction sites.</summary>
     public List<Serf> Builders { get; } = new();
 
+    /// <summary>The settlers that gather map resources (lumberjacks, stonecutters).</summary>
+    public List<Serf> ResourceWorkers { get; } = new();
+
+    /// <summary>Positions of the trees still standing on the map.</summary>
+    public HashSet<Position> Trees { get; } = new();
+
+    /// <summary>Positions of the stones still on the map.</summary>
+    public HashSet<Position> Stones { get; } = new();
+
     /// <summary>The transport network of each player (index = player index).</summary>
     public List<TransportNetwork> Networks { get; } = new();
 
@@ -97,6 +106,7 @@ public sealed class Game
         Settlers.Clear();
         Collectors.Clear();
         Builders.Clear();
+        ResourceWorkers.Clear();
         foreach (var mapSettler in Map.Settlers)
         {
             var serf = new Serf(mapSettler.Party, new Position(mapSettler.PosX, mapSettler.PosY), SerfType.Worker)
@@ -121,6 +131,21 @@ public sealed class Game
             if (material == null)
                 continue;
             Stacks.Add(new ResourceStack(new Position(mapStack.PosX, mapStack.PosY), material.Value, mapStack.Count));
+        }
+
+        // Track the trees and stones on the map so they can be cut/mined.
+        Trees.Clear();
+        Stones.Clear();
+        for (int y = 0; y < Map.Size; y++)
+        {
+            for (int x = 0; x < Map.Size; x++)
+            {
+                byte mapObject = Map.GetCell(x, y).MapObject;
+                if (IsTreeObject(mapObject))
+                    Trees.Add(new Position(x, y));
+                else if (IsStoneObject(mapObject))
+                    Stones.Add(new Position(x, y));
+            }
         }
 
         foreach (var player in Players)
@@ -212,6 +237,121 @@ public sealed class Game
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Places the demo production chain near the start position: a
+    /// lumberjack, a stonecutter and a sawmill, plus a few stones for the
+    /// stonecutter to mine. The buildings are placed on walkable cells of
+    /// the start's connected area so their workers can reach the trees and
+    /// stones. Returns the placed buildings.
+    /// </summary>
+    public List<Building> PlaceDemoBuildings()
+    {
+        var placed = new List<Building>();
+        var player = GetPlayer(0);
+        if (player == null)
+            return placed;
+
+        // The walkable area connected to the start (BFS).
+        var walkable = GetWalkableArea(player.StartPosition);
+
+        // The lumberjack goes near a tree, the stonecutter and sawmill on
+        // walkable cells of the area.
+        var lumberPos = FindDemoPosition(walkable, player.StartPosition, p => FindNearestTree(p, 10) != null);
+        if (lumberPos.HasValue)
+        {
+            var building = PlaceBuilding(BuildingType.Lumberjack, lumberPos.Value, 0);
+            if (building != null)
+                placed.Add(building);
+        }
+
+        var stonePos = FindDemoPosition(walkable, player.StartPosition, _ => true);
+        if (stonePos.HasValue)
+        {
+            var building = PlaceBuilding(BuildingType.Stonecutter, stonePos.Value, 0);
+            if (building != null)
+                placed.Add(building);
+        }
+
+        var sawPos = FindDemoPosition(walkable, player.StartPosition, _ => true);
+        if (sawPos.HasValue)
+        {
+            var building = PlaceBuilding(BuildingType.Sawmill, sawPos.Value, 0);
+            if (building != null)
+                placed.Add(building);
+        }
+
+        AddDemoStones(player.StartPosition, walkable);
+        return placed;
+    }
+
+    /// <summary>Collects the walkable cells connected to the given position (BFS).</summary>
+    List<Position> GetWalkableArea(Position start)
+    {
+        var area = new List<Position>();
+        var visited = new HashSet<Position>();
+        var queue = new Queue<Position>();
+        queue.Enqueue(start);
+        visited.Add(start);
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            area.Add(current);
+            foreach (var direction in MapGeometry.AllDirections())
+            {
+                var neighbor = current.GetNeighbor(direction);
+                if (!Map.IsInBounds(neighbor) || !visited.Add(neighbor))
+                    continue;
+                if (!IsWalkable(Map, neighbor))
+                    continue;
+                queue.Enqueue(neighbor);
+            }
+        }
+        return area;
+    }
+
+    /// <summary>
+    /// Finds a free walkable cell of the area for a demo building, starting
+    /// near the start position and satisfying the given predicate.
+    /// </summary>
+    Position? FindDemoPosition(List<Position> walkable, Position start, Func<Position, bool> predicate)
+    {
+        foreach (var pos in walkable.OrderBy(p => MapGeometry.GetDistance(p, start)))
+        {
+            if (MapGeometry.GetDistance(pos, start) < 3)
+                continue;
+            if (IsBuildingAt(pos))
+                continue;
+            if (!predicate(pos))
+                continue;
+            return pos;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Adds a few stones on walkable cells of the start's area so the
+    /// stonecutter has something to mine.
+    /// </summary>
+    void AddDemoStones(Position start, List<Position> walkable)
+    {
+        int added = 0;
+        foreach (var pos in walkable.OrderBy(p => MapGeometry.GetDistance(p, start)))
+        {
+            if (added >= 4)
+                break;
+            if (MapGeometry.GetDistance(pos, start) < 3)
+                continue;
+            if (Stones.Contains(pos) || Trees.Contains(pos) || IsBuildingAt(pos))
+                continue;
+
+            Stones.Add(pos);
+            var cell = Map.GetCell(pos);
+            cell.MapObject = 1; // big stone
+            Map.SetCell(pos, cell);
+            added++;
+        }
     }
 
     /// <summary>
@@ -343,6 +483,72 @@ public sealed class Game
             }
         }
         return nearest;
+    }
+
+    /// <summary>
+    /// Whether a map-file object byte is a tree. Tree objects are 68-80
+    /// (birch, elm, oak, ...) and 84 (small tree), see the original map
+    /// object types.
+    /// </summary>
+    public static bool IsTreeObject(byte mapObject)
+    {
+        return mapObject is >= 68 and <= 80 or 84;
+    }
+
+    /// <summary>
+    /// Whether a map-file object byte is a minable stone. The big stones
+    /// are objects 1-8 (see the original map object types).
+    /// </summary>
+    public static bool IsStoneObject(byte mapObject)
+    {
+        return mapObject is >= 1 and <= 8;
+    }
+
+    /// <summary>
+    /// Finds the nearest tree within the given radius (Manhattan distance),
+    /// or null if there is none.
+    /// </summary>
+    public Position? FindNearestTree(Position position, int radius)
+    {
+        return FindNearestResource(Trees, position, radius);
+    }
+
+    /// <summary>
+    /// Finds the nearest stone within the given radius (Manhattan distance),
+    /// or null if there is none.
+    /// </summary>
+    public Position? FindNearestStone(Position position, int radius)
+    {
+        return FindNearestResource(Stones, position, radius);
+    }
+
+    static Position? FindNearestResource(HashSet<Position> resources, Position position, int radius)
+    {
+        Position? nearest = null;
+        int nearestDistance = int.MaxValue;
+
+        foreach (var resource in resources)
+        {
+            int distance = MapGeometry.GetDistance(position, resource);
+            if (distance > radius || distance >= nearestDistance)
+                continue;
+
+            nearest = resource;
+            nearestDistance = distance;
+        }
+        return nearest;
+    }
+
+    /// <summary>Removes a tree from the map (it has been cut down).</summary>
+    public void CutTree(Position position)
+    {
+        Trees.Remove(position);
+    }
+
+    /// <summary>Removes a stone from the map (it has been mined).</summary>
+    public void MineStone(Position position)
+    {
+        Stones.Remove(position);
     }
 
     /// <summary>Gets the stock flag of the given player, or null.</summary>
@@ -512,6 +718,163 @@ public sealed class Game
         Builders.Remove(builder);
     }
 
+    /// <summary>Ticks between two work actions of a resource worker.</summary>
+    const int ResourceWorkTicks = 30;
+
+    /// <summary>
+    /// Assigns a free settler as resource worker of the given production
+    /// building (lumberjack, stonecutter). The worker appears at the
+    /// building's flag and starts gathering resources.
+    /// </summary>
+    void AssignResourceWorker(Building building, Player player)
+    {
+        player.FreeSettlers--;
+        building.AssignWorker(building.Definition.Worker);
+        var start = building.Flag?.Position ?? building.Position;
+        var worker = new Serf(player.Index, start, SerfType.ResourceWorker)
+        {
+            Workplace = building,
+            Profession = building.Definition.Worker,
+            ResourceState = ResourceWorkerState.LookingForResource,
+            MoveInterval = 4
+        };
+        Settlers.Add(worker);
+        ResourceWorkers.Add(worker);
+    }
+
+    /// <summary>
+    /// Advances the resource workers: they look for a tree or stone in the
+    /// work radius of their building, walk to it, cut/mine it and produce
+    /// the building's output (following settlers-remake).
+    /// </summary>
+    void TickResourceWorkers()
+    {
+        for (int i = ResourceWorkers.Count - 1; i >= 0; i--)
+        {
+            var worker = ResourceWorkers[i];
+            var building = worker.Workplace;
+
+            if (building == null || building.State != BuildingState.Active)
+            {
+                ReleaseResourceWorker(worker);
+                continue;
+            }
+
+            switch (worker.ResourceState)
+            {
+                case ResourceWorkerState.LookingForResource:
+                    var resource = FindResourceFor(building, worker.Position);
+                    if (resource == null)
+                    {
+                        worker.ResourceState = ResourceWorkerState.Pausing;
+                        break;
+                    }
+
+                    worker.ResourceTarget = resource;
+                    var path = Pathfinder.FindPath(Map, worker.Position, resource.Value, IsWalkable);
+                    if (path != null && path.Count > 0)
+                    {
+                        worker.SetPath(path);
+                        worker.ResourceState = ResourceWorkerState.WalkingToResource;
+                    }
+                    else
+                    {
+                        worker.ResourceState = ResourceWorkerState.Pausing;
+                    }
+                    break;
+
+                case ResourceWorkerState.WalkingToResource:
+                    worker.Tick();
+                    if (worker.State != MovableState.Idle)
+                        break;
+
+                    // Arrived at the tree/stone: start cutting/mining.
+                    worker.WorkTicks = 0;
+                    worker.ResourceState = ResourceWorkerState.Working;
+                    break;
+
+                case ResourceWorkerState.Working:
+                    // Face the tree/stone while cutting/mining.
+                    if (worker.ResourceTarget is Position resourceTarget)
+                    {
+                        var facing = worker.Position.GetDirectionTo(resourceTarget);
+                        if (facing.HasValue)
+                            worker.Facing = facing.Value;
+                    }
+                    worker.WorkTicks++;
+                    if (worker.WorkTicks < ResourceWorkTicks)
+                        break;
+
+                    // Cut the tree or mine the stone and produce the output.
+                    var target = worker.ResourceTarget;
+                    if (target.HasValue)
+                    {
+                        if (building.Definition.Worker == WorkerType.Lumberjack)
+                            CutTree(target.Value);
+                        else if (building.Definition.Worker == WorkerType.Stonecutter)
+                            MineStone(target.Value);
+                        building.ProduceResource();
+                    }
+                    var home = building.Flag?.Position ?? building.Position;
+                    var homePath = Pathfinder.FindPath(Map, worker.Position, home, IsWalkable);
+                    if (homePath != null && homePath.Count > 0)
+                    {
+                        worker.SetPath(homePath);
+                        worker.ResourceState = ResourceWorkerState.WalkingHome;
+                    }
+                    else
+                    {
+                        worker.ResourceState = ResourceWorkerState.LookingForResource;
+                    }
+                    break;
+
+                case ResourceWorkerState.WalkingHome:
+                    worker.Tick();
+                    if (worker.State != MovableState.Idle)
+                        break;
+
+                    worker.ResourceTarget = null;
+                    worker.ResourceState = ResourceWorkerState.LookingForResource;
+                    break;
+
+                case ResourceWorkerState.Pausing:
+                    worker.IdleTicks++;
+                    if (worker.IdleTicks >= 30)
+                    {
+                        worker.IdleTicks = 0;
+                        worker.ResourceState = ResourceWorkerState.LookingForResource;
+                    }
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Finds the next tree or stone for the building's worker within the
+    /// building's work radius, or null if none is left. Only reachable
+    /// resources are considered (like settlers-remake preSearchPath).
+    /// </summary>
+    Position? FindResourceFor(Building building, Position workerPosition)
+    {
+        int radius = building.Definition.WorkRadius;
+        if (building.Definition.Worker == WorkerType.Lumberjack)
+            return Pathfinder.FindNearest(Map, workerPosition, (m, p) => Trees.Contains(p), radius, IsWalkable);
+        if (building.Definition.Worker == WorkerType.Stonecutter)
+            return Pathfinder.FindNearest(Map, workerPosition, (m, p) => Stones.Contains(p), radius, IsWalkable);
+        return null;
+    }
+
+    /// <summary>Releases a resource worker: it becomes a free settler again.</summary>
+    void ReleaseResourceWorker(Serf worker)
+    {
+        var player = GetPlayer(worker.Player);
+        if (player != null)
+            player.FreeSettlers++;
+        worker.Workplace = null;
+        worker.Type = SerfType.Worker;
+        ResourceWorkers.Remove(worker);
+    }
+
     /// <summary>
     /// Whether the player still needs the given material for one of its
     /// construction sites. Such materials stay at the stock flag so the
@@ -581,8 +944,18 @@ public sealed class Game
                 && player != null
                 && player.FreeSettlers > 0)
             {
-                player.FreeSettlers--;
-                building.AssignWorker(building.Definition.Worker);
+                if (building.Definition.IsResourceProducer)
+                {
+                    // Resource producers (lumberjack, stonecutter) are
+                    // staffed by a single resource worker that gathers
+                    // trees/stones (like settlers-remake).
+                    AssignResourceWorker(building, player);
+                }
+                else
+                {
+                    player.FreeSettlers--;
+                    building.AssignWorker(building.Definition.Worker);
+                }
             }
 
             // Produced goods are queued at the building's flag for the
@@ -687,11 +1060,11 @@ public sealed class Game
             network.Tick();
 
         // Settlers wander around the map; after a short pause they pick a
-        // new walk target. Collectors and builders are driven by their own
-        // state machines.
+        // new walk target. Collectors, builders and resource workers are
+        // driven by their own state machines.
         foreach (var settler in Settlers)
         {
-            if (settler.Type is SerfType.Collector or SerfType.Builder)
+            if (settler.Type is SerfType.Collector or SerfType.Builder or SerfType.ResourceWorker)
                 continue;
             settler.Tick();
             if (settler.State == MovableState.Idle)
@@ -711,6 +1084,9 @@ public sealed class Game
 
         // Builders build the construction sites.
         TickBuilders();
+
+        // Resource workers cut trees and mine stones.
+        TickResourceWorkers();
 
         // Living houses grow the population over time.
         if (Tick % 600 == 0)

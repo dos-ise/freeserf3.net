@@ -149,11 +149,16 @@ public sealed class Building
     /// <summary>
     /// Advances the building by one tick. Active producers consume inputs
     /// and produce their output. Construction sites are built by their
-    /// builder via <see cref="ConsumeConstructionMaterial"/>.
+    /// builder via <see cref="ConsumeConstructionMaterial"/>. Resource
+    /// producers (lumberjack, stonecutter) are driven by their worker via
+    /// <see cref="ProduceResource"/>.
     /// </summary>
     public void Tick()
     {
         if (State != BuildingState.Active)
+            return;
+
+        if (Definition.IsResourceProducer)
             return;
 
         if (!Definition.IsProducer || !HasWorker)
@@ -217,5 +222,16 @@ public sealed class Building
             Output.Add(output);
 
         ProductionProgress = 0;
+    }
+
+    /// <summary>
+    /// Produces one unit of the building's output. Used by resource
+    /// producers (lumberjack, stonecutter) when their worker has gathered
+    /// a tree or stone.
+    /// </summary>
+    public void ProduceResource()
+    {
+        if (Definition.Output is Material output)
+            Output.Add(output);
     }
 }

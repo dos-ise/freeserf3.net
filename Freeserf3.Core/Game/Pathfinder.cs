@@ -81,10 +81,12 @@ public static class Pathfinder
     /// Finds the nearest reachable position satisfying <paramref name="isTarget"/>
     /// within <paramref name="maxDistance"/> steps, using a breadth-first search.
     /// </summary>
-    public static Position? FindNearest(Map map, Position start, Func<Map, Position, bool> isTarget, int maxDistance = int.MaxValue)
+    public static Position? FindNearest(Map map, Position start, Func<Map, Position, bool> isTarget, int maxDistance = int.MaxValue, Func<Map, Position, bool>? isWalkable = null)
     {
         if (!map.IsInBounds(start))
             return null;
+
+        isWalkable ??= DefaultWalkable;
 
         if (isTarget(map, start))
             return start;
@@ -103,6 +105,8 @@ public static class Pathfinder
             {
                 var neighbor = pos.GetNeighbor(direction);
                 if (!map.IsInBounds(neighbor) || !visited.Add(neighbor))
+                    continue;
+                if (!isWalkable(map, neighbor))
                     continue;
 
                 if (isTarget(map, neighbor))

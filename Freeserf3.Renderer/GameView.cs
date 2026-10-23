@@ -163,11 +163,12 @@ public sealed class GameView : IDisposable
         log($"Round started: {game.Players.Count} players, target population {game.TargetPopulation}");
         log($"Stacks: {game.Stacks.Count}, collectors: {game.Collectors.Count}");
 
-        // Demo: place a construction site so the building feature is visible.
-        var demoBuilding = game.PlaceDemoBuilding(BuildingType.Sawmill);
-        log(demoBuilding != null
-            ? $"Demo construction site: {demoBuilding.Type} at {demoBuilding.Position}"
-            : "No position for a demo construction site found.");
+        // Demo: place the production chain (lumberjack, stonecutter,
+        // sawmill) so the building and resource features are visible.
+        var demoBuildings = game.PlaceDemoBuildings();
+        log(demoBuildings.Count > 0
+            ? $"Demo buildings: {string.Join(", ", demoBuildings.Select(b => $"{b.Type} at {b.Position}"))}"
+            : "No positions for demo buildings found.");
 
         CenterOnMap(screenWidth, screenHeight);
         State.Gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -476,6 +477,8 @@ public sealed class GameView : IDisposable
                     continue;
                 if (settler.Type == SerfType.Collector)
                     gameObjects.AddCarrier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.CarriedGood, settler.Facing);
+                else if (settler.Type == SerfType.ResourceWorker && settler.ResourceState == ResourceWorkerState.Working)
+                    gameObjects.AddWorkingMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, settler.Profession);
                 else
                     gameObjects.AddMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing);
             }
@@ -543,15 +546,34 @@ public sealed class GameView : IDisposable
             }
         }
 
-        // Trees and other map objects.
+        // Trees and stones still on the map (cut/mined ones disappear).
         ulong tick = game?.Tick ?? 0;
-        for (int y = 0; y < size; y++)
+        if (game != null)
         {
-            for (int x = 0; x < size; x++)
+            foreach (var tree in game.Trees)
             {
-                var cell = gameMap.GetCell(x, y);
-                if (GameObjectRenderer.IsTreeObject(cell.MapObject))
-                    gameObjects.AddTree(new Position(x, y), cell.Height, tick);
+                if (!gameMap.IsInBounds(tree))
+                    continue;
+                gameObjects.AddTree(tree, gameMap.GetCell(tree).Height, tick);
+            }
+
+            foreach (var stone in game.Stones)
+            {
+                if (!gameMap.IsInBounds(stone))
+                    continue;
+                gameObjects.AddStone(stone, gameMap.GetCell(stone).Height, 1);
+            }
+        }
+        else
+        {
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    var cell = gameMap.GetCell(x, y);
+                    if (GameObjectRenderer.IsTreeObject(cell.MapObject))
+                        gameObjects.AddTree(new Position(x, y), cell.Height, tick);
+                }
             }
         }
 

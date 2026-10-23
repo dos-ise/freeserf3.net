@@ -71,6 +71,15 @@ public sealed class GameObjectRenderer : IDisposable
     /// <summary>Tree sprite sequences in the objects file (from settlers-remake).</summary>
     public static readonly int[] TreeSequences = { 1, 2, 4, 7, 8, 16, 17 };
 
+    /// <summary>Stone sprite sequence in the objects file (from settlers-remake MapObjectDrawer).</summary>
+    public const int StoneSequence = 31;
+
+    /// <summary>Stonecutter working sequence (ACTION1) in the settler file (from settlers-remake movables.txt).</summary>
+    public const int StonecutterWorkSequence = 25;
+
+    /// <summary>Lumberjack working sequence (ACTION1) in the settler file (from settlers-remake movables.txt).</summary>
+    public const int LumberjackWorkSequence = 30;
+
     /// <summary>Stack sprite sequence per material in the objects file (from settlers-remake EMaterialType).</summary>
     public static readonly Dictionary<Material, int> StackSequences = new()
     {
@@ -188,6 +197,7 @@ public sealed class GameObjectRenderer : IDisposable
     readonly Dictionary<int, SpriteImage[]> treeImages = new();
     readonly Dictionary<int, SpriteImage> borderImages = new();
     readonly Dictionary<int, SpriteImage[]> stackImages = new();
+    SpriteImage[]? stoneImages;
     SpriteImage? flagImage;
     SpriteImage? roadImage;
     TextureRegion whiteRegion;
@@ -271,6 +281,30 @@ public sealed class GameObjectRenderer : IDisposable
             }
         }
 
+        // Working sequences of the resource workers (from settlers-remake
+        // movables.txt): stonecutter ACTION1 = 25, lumberjack ACTION1 = 30.
+        foreach (int sequence in new[] { StonecutterWorkSequence, LumberjackWorkSequence })
+        {
+            var frames = settlers.GetSettlerSequence(sequence);
+            if (frames.Length == 0)
+                continue;
+
+            var torsos = settlers.GetSettlerTorsoSequence(sequence);
+            var shadows = settlers.GetSettlerShadowSequence(sequence);
+
+            foreach (int color in colors)
+            {
+                var images = new SpriteImage[frames.Length];
+                for (int i = 0; i < frames.Length; i++)
+                {
+                    var torso = i < torsos.Length ? torsos[i] : null;
+                    var shadow = i < shadows.Length ? shadows[i] : null;
+                    images[i] = AddToAtlas(CombineSettler(frames[i], torso, shadow, PlayerColors[color]));
+                }
+                settlerImages[(color, sequence)] = images;
+            }
+        }
+
         // Road texture (landscape image).
         var road = buildings.GetLandscape(RoadImage);
         if (road != null)
@@ -296,6 +330,16 @@ public sealed class GameObjectRenderer : IDisposable
             treeImages[sequence] = images;
         }
         Console.WriteLine($"Trees: {treeImages.Count} sequences loaded");
+
+        // Stones: one sequence with a frame per remaining stone count.
+        var stoneFrames = objects.GetSettlerSequence(StoneSequence);
+        if (stoneFrames.Length > 0)
+        {
+            stoneImages = new SpriteImage[stoneFrames.Length];
+            for (int i = 0; i < stoneFrames.Length; i++)
+                stoneImages[i] = AddToAtlas(stoneFrames[i]);
+        }
+        Console.WriteLine($"Stones: {stoneImages?.Length ?? 0} frames loaded");
 
         // Border posts tinted with the player colors.
         var borderFrames = buildings.GetSettlerSequence(BorderSequence);
@@ -520,6 +564,22 @@ public sealed class GameObjectRenderer : IDisposable
     }
 
     /// <summary>
+    /// Adds a resource worker sprite while it is cutting a tree or mining a
+    /// stone. Uses the working sequence of the profession (lumberjack
+    /// ACTION1, stonecutter ACTION1). The working sequences hold fewer
+    /// frames than the walking ones, so the animation step is clamped.
+    /// </summary>
+    public void AddWorkingMovable(Position pos, int height, int playerColor, int frame, Direction direction, WorkerType profession)
+    {
+        int sequence = profession == WorkerType.Stonecutter ? StonecutterWorkSequence : LumberjackWorkSequence;
+        if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
+            return;
+
+        int index = Math.Clamp(frame, 0, frames.Length - 1);
+        AddSprite(frames[index], pos, height, 0.5f);
+    }
+
+    /// <summary>
     /// Adds a carrier sprite. When the carrier carries a good with a
     /// dedicated carrying animation (sequence 1-12, good on the back) that
     /// sequence is used, otherwise the plain walking animation (sequence 0).
@@ -578,6 +638,19 @@ public sealed class GameObjectRenderer : IDisposable
 
         int step = (int)((tick + (ulong)(pos.X * 167 + pos.Y * 1223)) % (ulong)frames.Length);
         AddSprite(frames[step], pos, height, 0.3f);
+    }
+
+    /// <summary>
+    /// Adds a stone sprite at the given grid position. The frame shows the
+    /// remaining stone count (like settlers-remake drawStones).
+    /// </summary>
+    public void AddStone(Position pos, int height, int remaining)
+    {
+        if (stoneImages == null || stoneImages.Length == 0)
+            return;
+
+        int frame = Math.Clamp(stoneImages.Length - remaining - 1, 0, stoneImages.Length - 1);
+        AddSprite(stoneImages[frame], pos, height, 0.3f);
     }
 
     /// <summary>Adds a player border post at the given grid position.</summary>

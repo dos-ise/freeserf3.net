@@ -25,7 +25,10 @@ public enum SerfType
     Worker,
 
     /// <summary>Collects resources from map stacks and carries them to the stock.</summary>
-    Collector
+    Collector,
+
+    /// <summary>Gathers map resources (cuts trees, mines stones) for a production building.</summary>
+    ResourceWorker
 }
 
 /// <summary>The states of a resource collector.</summary>
@@ -52,6 +55,25 @@ public enum BuilderState
 
     /// <summary>At the construction site, building.</summary>
     Building
+}
+
+/// <summary>The states of a resource worker (lumberjack, stonecutter).</summary>
+public enum ResourceWorkerState
+{
+    /// <summary>Looking for a tree or stone in the work radius.</summary>
+    LookingForResource,
+
+    /// <summary>Walking to the found tree or stone.</summary>
+    WalkingToResource,
+
+    /// <summary>Cutting the tree or mining the stone.</summary>
+    Working,
+
+    /// <summary>Walking back to the building after gathering.</summary>
+    WalkingHome,
+
+    /// <summary>Pausing before looking for the next resource.</summary>
+    Pausing
 }
 
 /// <summary>
@@ -86,6 +108,18 @@ public sealed class Serf : Movable
 
     /// <summary>Ticks spent on the current build action.</summary>
     public int BuildTicks { get; set; }
+
+    /// <summary>Resource worker state (only used by resource workers).</summary>
+    public ResourceWorkerState ResourceState { get; set; } = ResourceWorkerState.LookingForResource;
+
+    /// <summary>The production building the resource worker works in.</summary>
+    public Building? Workplace { get; set; }
+
+    /// <summary>The tree or stone the resource worker is heading to.</summary>
+    public Position? ResourceTarget { get; set; }
+
+    /// <summary>Ticks spent on the current cut/mine action.</summary>
+    public int WorkTicks { get; set; }
 
     /// <summary>The good currently carried, or null.</summary>
     public Material? CarriedGood { get; set; }
