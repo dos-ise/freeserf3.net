@@ -135,7 +135,7 @@ public class MainActivity : SilkActivity
             }
 
             gameView = new GameView(gameData, s => Log.Debug(Tag, s));
-            gameView.ExitRequested += () => RunOnUiThread(Finish);
+            gameView.ExitRequested += () => activity.RunOnUiThread(activity.Finish);
             if (!gameView.Load(null, view.FramebufferSize.X, view.FramebufferSize.Y))
             {
                 Log.Error(Tag, "Failed to load the game.");
