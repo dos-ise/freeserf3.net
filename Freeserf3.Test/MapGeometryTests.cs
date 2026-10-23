@@ -118,7 +118,8 @@ public class MapGeometryTests
 
         // Moving in the approximate direction must reduce the distance.
         var next = start.GetNeighbor(dir);
-        Assert.IsLessThan(next.GetDistanceTo(end), start.GetDistanceTo(end));
+        // Note: MSTest 4.x IsLessThan(upperBound, value).
+        Assert.IsLessThan(start.GetDistanceTo(end), next.GetDistanceTo(end));
     }
 
     [TestMethod]
