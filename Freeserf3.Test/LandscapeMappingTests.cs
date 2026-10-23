@@ -44,6 +44,22 @@ public class LandscapeMappingTests : DataTestBase
     }
 
     [TestMethod]
+    public void DetectsWater()
+    {
+        Assert.IsTrue(LandscapeMapping.IsWater(LandscapeType.Water1));
+        Assert.IsTrue(LandscapeMapping.IsWater(LandscapeType.Water8));
+        Assert.IsTrue(LandscapeMapping.IsWater(LandscapeType.River1));
+        Assert.IsTrue(LandscapeMapping.IsWater(LandscapeType.River4));
+        Assert.IsFalse(LandscapeMapping.IsWater(LandscapeType.Grass));
+        Assert.IsFalse(LandscapeMapping.IsWater(LandscapeType.Mountain));
+        Assert.IsFalse(LandscapeMapping.IsWater(LandscapeType.Sand));
+
+        // Map value 0 is water, 16 is grass.
+        Assert.IsTrue(LandscapeMapping.IsWater((byte)0));
+        Assert.IsFalse(LandscapeMapping.IsWater((byte)16));
+    }
+
+    [TestMethod]
     public void BorderTransitionUsesBorderTexture()
     {
         // Grass -> Sand transition (base index 112).

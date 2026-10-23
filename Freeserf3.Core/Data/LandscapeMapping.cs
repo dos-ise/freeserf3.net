@@ -220,6 +220,23 @@ public static class LandscapeMapping
         return originalLandscape.TryGetValue(value, out var type) ? type : null;
     }
 
+    /// <summary>Whether the given landscape type is water (sea or river).</summary>
+    public static bool IsWater(LandscapeType type)
+    {
+        return type is LandscapeType.Water1 or LandscapeType.Water2 or LandscapeType.Water3
+            or LandscapeType.Water4 or LandscapeType.Water5 or LandscapeType.Water6
+            or LandscapeType.Water7 or LandscapeType.Water8
+            or LandscapeType.River1 or LandscapeType.River2 or LandscapeType.River3
+            or LandscapeType.River4;
+    }
+
+    /// <summary>Whether the given map landscape byte is water (sea or river).</summary>
+    public static bool IsWater(byte value)
+    {
+        var type = FromMapValue(value);
+        return type.HasValue && IsWater(type.Value);
+    }
+
     /// <summary>Gets the base image number of a landscape type.</summary>
     public static int GetImageNumber(LandscapeType type)
     {

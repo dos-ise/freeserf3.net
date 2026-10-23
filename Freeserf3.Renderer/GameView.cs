@@ -586,14 +586,18 @@ public sealed class GameView : IDisposable
             }
         }
 
-        // Player border posts: drawn where the territory owner changes
-        // between neighbouring cells.
+        // Player border posts: drawn on land cells where the territory ends
+        // - at the coast (a water neighbour) or at another player's land.
+        // Water cells themselves never get a border post (like
+        // settlers-remake, where blocked/sea cells are skipped).
         for (int y = 0; y < size; y++)
         {
             for (int x = 0; x < size; x++)
             {
                 var cell = gameMap.GetCell(x, y);
                 if (cell.Player == 0)
+                    continue;
+                if (LandscapeMapping.IsWater(cell.Landscape))
                     continue;
 
                 bool isBorder = false;
@@ -602,7 +606,14 @@ public sealed class GameView : IDisposable
                     var neighbor = new Position(x, y).GetNeighbor(direction);
                     if (!gameMap.IsInBounds(neighbor))
                         continue;
-                    if (gameMap.GetCell(neighbor).Player != cell.Player)
+                    var neighborCell = gameMap.GetCell(neighbor);
+                    if (LandscapeMapping.IsWater(neighborCell.Landscape))
+                    {
+                        // The territory ends at the coast.
+                        isBorder = true;
+                        break;
+                    }
+                    if (neighborCell.Player != cell.Player)
                     {
                         isBorder = true;
                         break;
