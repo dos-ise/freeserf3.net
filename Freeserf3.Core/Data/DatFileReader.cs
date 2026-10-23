@@ -334,7 +334,8 @@ public sealed class DatFileReader
             var torsos = new DatImage[Math.Min(torsoPositions.Length, framePositions.Length)];
             for (int i = 0; i < torsos.Length; i++)
             {
-                torsos[i] = GetImage(torsoPositions[i], HeaderType.Displaced, $"{fileName}-T{goldIndex}:{i}");
+                // Torso: 8-bit grayscale mask (TorsoTranslator).
+                torsos[i] = GetImage(torsoPositions[i], HeaderType.Displaced, $"{fileName}-T{goldIndex}:{i}", isTorso: true);
             }
             torsoSequences![goldIndex] = torsos;
         }
@@ -346,7 +347,9 @@ public sealed class DatFileReader
             var shadows = new DatImage[Math.Min(shadowPositions.Length, framePositions.Length)];
             for (int i = 0; i < shadows.Length; i++)
             {
-                shadows[i] = GetImage(shadowPositions[i], HeaderType.Displaced, $"{fileName}-SH{goldIndex}:{i}");
+                // Shadows are a mask: non-transparent pixels become a
+                // semi-transparent black (alpha 0.5), see ShadowTranslator.
+                shadows[i] = GetImage(shadowPositions[i], HeaderType.Displaced, $"{fileName}-SH{goldIndex}:{i}", unchecked((int)0x88000000));
             }
             shadowSequences![goldIndex] = shadows;
         }
@@ -402,7 +405,7 @@ public sealed class DatFileReader
         Gui
     }
 
-    DatImage GetImage(long position, HeaderType headerType, string name)
+    DatImage GetImage(long position, HeaderType headerType, string name, int untransparentColor = -1, bool isTorso = false)
     {
         var reader = new ByteReader(data);
         reader.SkipTo(position);
@@ -433,11 +436,11 @@ public sealed class DatFileReader
         if (reader.Position % 2 == 1)
             reader.Read8();
 
-        byte[] rgba = ReadCompressedData(reader, width, height);
+        byte[] rgba = ReadCompressedData(reader, width, height, untransparentColor, isTorso);
         return new DatImage(width, height, offsetX, offsetY, rgba);
     }
 
-    byte[] ReadCompressedData(ByteReader reader, int width, int height)
+    byte[] ReadCompressedData(ByteReader reader, int width, int height, int untransparentColor = -1, bool isTorso = false)
     {
         var rgba = new byte[width * height * 4];
         int transparent = 0;
@@ -465,8 +468,27 @@ public sealed class DatFileReader
                 int readPartEnd = x + sequenceLength;
                 while (x < readPartEnd && x < width)
                 {
-                    int color = reader.Read16();
-                    WritePixel(rgba, width, x, y, ConvertTo8888(color));
+                    int color;
+                    if (isTorso)
+                    {
+                        // Torso: 8-bit grayscale mask, 5-bit effective
+                        // (TorsoTranslator). Stored opaque with the tint
+                        // intensity in the blue channel.
+                        int read = (reader.Read8() & 0x1f) * 255 / 31;
+                        color = (0xff << 24) | read;
+                    }
+                    else if (untransparentColor != -1)
+                    {
+                        // Shadow: a pure mask without pixel data; every
+                        // non-transparent pixel is the same color
+                        // (ShadowTranslator returns 136 = alpha 0.5).
+                        color = untransparentColor;
+                    }
+                    else
+                    {
+                        color = ConvertTo8888(reader.Read16());
+                    }
+                    WritePixel(rgba, width, x, y, color);
                     x++;
                 }
             }
