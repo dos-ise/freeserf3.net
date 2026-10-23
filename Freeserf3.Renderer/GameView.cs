@@ -64,6 +64,10 @@ public sealed class GameView : IDisposable
     Vector2? mousePosition;
     int lastScreenWidth, lastScreenHeight;
 
+    // Map to start on the next render (the GL context is only current in
+    // the render loop, so the game cannot be started from a click handler).
+    string? pendingMapFile;
+
     public GameView(GameData gameData, Action<string>? log = null)
     {
         this.gameData = gameData;
@@ -108,14 +112,14 @@ public sealed class GameView : IDisposable
         menu = new MainMenu(State.Gl);
         menu.Load(gameData);
         menu.SinglePlayerSelected += () => menu.ShowMapSelection();
-        menu.MapSelected += map => StartGame(map);
+        menu.MapSelected += map => pendingMapFile = map;
         menu.MultiplayerSelected += () => log("Multiplayer not implemented yet.");
         menu.OptionsSelected += () => log("Options not implemented yet.");
         menu.ExitRequested += () => ExitRequested?.Invoke();
 
         // If a map was given on the command line, start it directly.
         if (mapFile != null)
-            StartGame(mapFile);
+            pendingMapFile = mapFile;
 
         State.Gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         return true;
@@ -253,8 +257,18 @@ public sealed class GameView : IDisposable
         // The start menu is drawn instead of the game while it is shown.
         if (menu != null)
         {
-            menu.Draw(screenWidth, screenHeight);
-            return;
+            // Start the selected map now that the GL context is current.
+            if (pendingMapFile != null)
+            {
+                string map = pendingMapFile;
+                pendingMapFile = null;
+                StartGame(map);
+            }
+            else
+            {
+                menu.Draw(screenWidth, screenHeight);
+                return;
+            }
         }
 
         if (terrain == null)

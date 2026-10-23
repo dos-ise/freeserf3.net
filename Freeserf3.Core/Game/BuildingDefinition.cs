@@ -32,7 +32,8 @@ public sealed class BuildingDefinition
         bool isMilitary = false,
         bool isLivinghouse = false,
         bool isResourceProducer = false,
-        int productionTime = DefaultProductionTime)
+        int productionTime = DefaultProductionTime,
+        int soldierCapacity = 0)
     {
         Type = type;
         Worker = worker;
@@ -45,6 +46,7 @@ public sealed class BuildingDefinition
         IsLivinghouse = isLivinghouse;
         IsResourceProducer = isResourceProducer;
         ProductionTime = productionTime;
+        SoldierCapacity = soldierCapacity;
     }
 
     public BuildingType Type { get; }
@@ -63,6 +65,9 @@ public sealed class BuildingDefinition
     /// </summary>
     public bool IsResourceProducer { get; }
     public int ProductionTime { get; }
+
+    /// <summary>Number of soldiers a military building can hold.</summary>
+    public int SoldierCapacity { get; }
 
     /// <summary>Total number of construction materials needed.</summary>
     public int TotalConstructionCost
@@ -270,23 +275,23 @@ public sealed class BuildingDefinition
 
         // --- Military buildings ---
         Add(new BuildingDefinition(BuildingType.LookoutTower, WorkerType.None,
-            new[] { (Material.Stone, 2), (Material.Plank, 2) }, isMilitary: true));
+            new[] { (Material.Stone, 2), (Material.Plank, 2) }, isMilitary: true, soldierCapacity: 1));
 
         Add(new BuildingDefinition(BuildingType.Tower, WorkerType.None,
-            new[] { (Material.Plank, 2), (Material.Stone, 3) }, isMilitary: true));
+            new[] { (Material.Plank, 2), (Material.Stone, 3) }, isMilitary: true, soldierCapacity: 3));
 
         Add(new BuildingDefinition(BuildingType.BigTower, WorkerType.None,
-            new[] { (Material.Plank, 5), (Material.Stone, 5) }, isMilitary: true));
+            new[] { (Material.Plank, 5), (Material.Stone, 5) }, isMilitary: true, soldierCapacity: 6));
 
         Add(new BuildingDefinition(BuildingType.Castle, WorkerType.None,
-            new[] { (Material.Stone, 12), (Material.Plank, 8) }, isMilitary: true));
+            new[] { (Material.Stone, 12), (Material.Plank, 8) }, isMilitary: true, soldierCapacity: 12));
 
         Add(new BuildingDefinition(BuildingType.Hospital, WorkerType.Healer,
             new[] { (Material.Plank, 3), (Material.Stone, 3) }, workRadius: 20));
 
         Add(new BuildingDefinition(BuildingType.Barrack, WorkerType.None,
             new[] { (Material.Stone, 4), (Material.Plank, 5) },
-            inputs: new[] { Material.Sword, Material.Spear, Material.Bow }, isMilitary: true));
+            inputs: new[] { Material.Sword, Material.Spear, Material.Bow }, isMilitary: true, soldierCapacity: 8));
 
         // --- Infrastructure ---
         Add(new BuildingDefinition(BuildingType.Dockyard, WorkerType.Dockworker,

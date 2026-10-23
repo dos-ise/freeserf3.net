@@ -70,6 +70,12 @@ public sealed class Building
     /// <summary>Construction materials already used by the builder.</summary>
     public Inventory ConsumedMaterials { get; } = new();
 
+    /// <summary>The soldiers stationed in this military building.</summary>
+    public List<Serf> Soldiers { get; } = new();
+
+    /// <summary>Whether the building has free soldier capacity.</summary>
+    public bool HasSoldierCapacity => Soldiers.Count < Definition.SoldierCapacity;
+
     /// <summary>
     /// The flag in front of the building. Produced goods are queued here
     /// and carried to the player's stock by a carrier.
