@@ -38,6 +38,7 @@ public class MainActivity : SilkActivity
     static GL? gl;
     static bool dragging;
     static Vector2 lastTouch;
+    static Vector2 touchDown;
     static float lastPinchDistance;
     static MainActivity? instance;
 
@@ -133,7 +134,7 @@ public class MainActivity : SilkActivity
                 return;
             }
 
-            gameView = new GameView(gameData, s => Log.Debug(Tag, s), useControlPanel: false);
+            gameView = new GameView(gameData, s => Log.Debug(Tag, s));
             if (!gameView.Load(null, view.FramebufferSize.X, view.FramebufferSize.Y))
             {
                 Log.Error(Tag, "Failed to load the game.");
@@ -194,7 +195,8 @@ public class MainActivity : SilkActivity
             {
                 case MotionEventActions.Down:
                     dragging = true;
-                    lastTouch = new Vector2(x, y);
+                    touchDown = new Vector2(x, y);
+                    lastTouch = touchDown;
                     break;
                 case MotionEventActions.Move:
                     if (dragging)
@@ -207,6 +209,16 @@ public class MainActivity : SilkActivity
                 case MotionEventActions.Up:
                 case MotionEventActions.Cancel:
                     dragging = false;
+
+                    // A tap (no significant drag) performs the interaction:
+                    // first the control panel, then the map.
+                    var position = new Vector2(x, y);
+                    if (Vector2.Distance(position, touchDown) < 4f)
+                    {
+                        if (gameView.HandlePanelClick(position))
+                            break;
+                        gameView.HandleClick(position, view!.FramebufferSize.X, view.FramebufferSize.Y);
+                    }
                     break;
             }
         }

@@ -43,12 +43,10 @@ public sealed class GameView : IDisposable
 {
     readonly GameData gameData;
     readonly Action<string> log;
-    readonly bool useControlPanel;
 
     TerrainRenderer? terrain;
     GameObjectRenderer? gameObjects;
     Minimap? minimap;
-    HudRenderer? hud;
     ControlPanel? controlPanel;
     Map? gameMap;
     Game? game;
@@ -62,11 +60,10 @@ public sealed class GameView : IDisposable
     BuildingType buildType = BuildingType.Lumberjack;
     Position? selected;
 
-    public GameView(GameData gameData, Action<string>? log = null, bool useControlPanel = true)
+    public GameView(GameData gameData, Action<string>? log = null)
     {
         this.gameData = gameData;
         this.log = log ?? (_ => { });
-        this.useControlPanel = useControlPanel;
     }
 
     /// <summary>The running game, or null if not loaded.</summary>
@@ -139,17 +136,11 @@ public sealed class GameView : IDisposable
         gameMap = Map.FromReader(map);
         minimap = new Minimap(State.Gl, gameMap);
 
-        if (useControlPanel)
-        {
-            controlPanel = new ControlPanel(State.Gl);
-            controlPanel.Load(gameData);
-            controlPanel.BuildingSelected += OnBuildingSelected;
-            controlPanel.SystemButtonClicked += OnSystemButtonClicked;
-        }
-        else
-        {
-            hud = new HudRenderer(State.Gl);
-        }
+        // Left-side control panel (building selection, system button).
+        controlPanel = new ControlPanel(State.Gl);
+        controlPanel.Load(gameData);
+        controlPanel.BuildingSelected += OnBuildingSelected;
+        controlPanel.SystemButtonClicked += OnSystemButtonClicked;
 
         // Start a new round: players, starting resources and population.
         game = new Game(gameMap, 42);
@@ -215,19 +206,10 @@ public sealed class GameView : IDisposable
             gameObjects.Draw(viewProjection, zoom);
         }
 
-        if (controlPanel != null)
-        {
-            // Minimap on top of the control panel, then the panel itself.
-            var (mx, my, mw, mh) = controlPanel.GetMiniMapRect(screenWidth, screenHeight);
-            minimap?.Draw(mx, my, mw, mh, screenWidth, screenHeight);
-            controlPanel.Draw(screenWidth, screenHeight);
-        }
-        else
-        {
-            // Minimap in the top-right corner, then the HUD text.
-            minimap?.Draw(screenWidth - 8f - 160f, 8f, 160f, 160f, screenWidth, screenHeight);
-            hud?.Draw(screenWidth, screenHeight, BuildHudLines());
-        }
+        // Minimap on top of the control panel, then the panel itself.
+        var (mx, my, mw, mh) = controlPanel.GetMiniMapRect(screenWidth, screenHeight);
+        minimap?.Draw(mx, my, mw, mh, screenWidth, screenHeight);
+        controlPanel.Draw(screenWidth, screenHeight);
     }
 
     /// <summary>Pans the camera by the given screen-space delta.</summary>
@@ -333,8 +315,6 @@ public sealed class GameView : IDisposable
     {
         controlPanel?.Dispose();
         controlPanel = null;
-        hud?.Dispose();
-        hud = null;
         minimap?.Dispose();
         minimap = null;
         gameObjects?.Dispose();
@@ -355,27 +335,6 @@ public sealed class GameView : IDisposable
     void OnSystemButtonClicked()
     {
         log("System button clicked (in-game menu)");
-    }
-
-    /// <summary>Builds the HUD text lines (resources, population, menu).</summary>
-    List<string> BuildHudLines()
-    {
-        var lines = new List<string>();
-        if (game == null)
-            return lines;
-
-        var player = game.GetPlayer(0);
-        if (player == null)
-            return lines;
-
-        lines.Add($"POP {player.Population}/{game.TargetPopulation}  FREE {player.FreeSettlers}");
-        lines.Add($"PLANK {player.Inventory.Get(Material.Plank)}  STONE {player.Inventory.Get(Material.Stone)}");
-        lines.Add($"TRUNK {player.Inventory.Get(Material.Trunk)}  BREAD {player.Inventory.Get(Material.Bread)}");
-
-        if (game.IsWon)
-            lines.Add("YOU WIN! POPULATION TARGET REACHED");
-
-        return lines;
     }
 
     /// <summary>Collects the sprites of the game objects for the current frame.</summary>

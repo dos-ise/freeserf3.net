@@ -69,7 +69,7 @@ public sealed class MainWindow : IDisposable
         input.Mice[0].Scroll += OnScroll;
         input.Keyboards[0].KeyDown += OnKeyDown;
 
-        gameView = new GameView(gameData, Console.WriteLine, useControlPanel: true);
+        gameView = new GameView(gameData, Console.WriteLine);
         if (!gameView.Load(Program.MapFile, window.Size.X, window.Size.Y))
         {
             throw new InvalidOperationException("Failed to load the game.");
