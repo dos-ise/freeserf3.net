@@ -42,8 +42,10 @@ public sealed class MainWindow : IDisposable
     TerrainRenderer? terrain;
     GameObjectRenderer? gameObjects;
     Minimap? minimap;
+    HudRenderer? hud;
     MapFileReader? map;
     Freeserf3.Simulation.Map? gameMap;
+    Freeserf3.Simulation.Game? game;
 
     // Camera state.
     Vector2 cameraOffset;
@@ -55,7 +57,6 @@ public sealed class MainWindow : IDisposable
     InteractionMode mode = InteractionMode.Select;
     BuildingType buildType = BuildingType.Lumberjack;
     Position? selected;
-    readonly List<(BuildingType Type, Position Pos)> placedBuildings = new();
 
     public MainWindow(GameData gameData)
     {
@@ -144,6 +145,12 @@ public sealed class MainWindow : IDisposable
 
         minimap = new Minimap(State.Gl, Freeserf3.Simulation.Map.FromReader(map));
         gameMap = Freeserf3.Simulation.Map.FromReader(map);
+        hud = new HudRenderer(State.Gl);
+
+        // Start a new round: players, starting resources and population.
+        game = new Freeserf3.Simulation.Game(gameMap, 42);
+        game.StartGame();
+        Console.WriteLine($"Round started: {game.Players.Count} players, target population {game.TargetPopulation}");
 
         // Center the camera on the map. The map's screen-space bounding box
         // is x: [-(size-1)*8, (size-1)*16], y: [0, (size-1)*9]; its center
@@ -167,6 +174,9 @@ public sealed class MainWindow : IDisposable
     {
         State.Gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
+        // Advance the simulation (60 ticks per second).
+        game?.TickOnce();
+
         if (terrain != null)
         {
             var viewProjection = CreateViewProjection();
@@ -181,6 +191,29 @@ public sealed class MainWindow : IDisposable
         }
 
         minimap?.Draw(window.Size.X, window.Size.Y);
+        hud?.Draw(window.Size.X, window.Size.Y, BuildHudLines());
+    }
+
+    /// <summary>Builds the HUD text lines (resources, population, menu).</summary>
+    List<string> BuildHudLines()
+    {
+        var lines = new List<string>();
+        if (game == null)
+            return lines;
+
+        var player = game.GetPlayer(0);
+        if (player == null)
+            return lines;
+
+        lines.Add($"POP {player.Population}/{game.TargetPopulation}  FREE {player.FreeSettlers}");
+        lines.Add($"PLANK {player.Inventory.Get(Material.Plank)}  STONE {player.Inventory.Get(Material.Stone)}");
+        lines.Add($"TRUNK {player.Inventory.Get(Material.Trunk)}  BREAD {player.Inventory.Get(Material.Bread)}");
+        lines.Add($"BUILD: {buildType}  MODE: {mode}");
+
+        if (game.IsWon)
+            lines.Add("YOU WIN! POPULATION TARGET REACHED");
+
+        return lines;
     }
 
     /// <summary>Collects the sprites of the game objects for the current frame.</summary>
@@ -207,16 +240,22 @@ public sealed class MainWindow : IDisposable
             gameObjects.AddBuilding(type.Value, new Position(x, y), height);
         }
 
-        // Buildings placed by the player.
-        foreach (var (type, pos) in placedBuildings)
+        // Buildings placed by the player (from the game simulation).
+        if (game != null)
         {
-            if (!gameMap.IsInBounds(pos))
-                continue;
-            gameObjects.AddBuilding(type, pos, gameMap.GetCell(pos).Height);
+            foreach (var building in game.Buildings)
+            {
+                if (building.State == BuildingState.Destroyed)
+                    continue;
+                if (!gameMap.IsInBounds(building.Position))
+                    continue;
+                gameObjects.AddBuilding(building.Type, building.Position, gameMap.GetCell(building.Position).Height);
+            }
         }
 
-        // Settlers placed on the map.
-        int frame = (int)(Environment.TickCount / 150) % 8;
+        // Settlers placed on the map. The animation frame follows the game
+        // clock (or wall time before the game starts).
+        int frame = (int)((game?.Tick ?? (ulong)Environment.TickCount) / 10) % 8;
         foreach (var settler in gameMap.Settlers)
         {
             var pos = new Position(settler.PosX, settler.PosY);
@@ -428,13 +467,16 @@ public sealed class MainWindow : IDisposable
     {
         selected = null;
 
-        foreach (var (type, buildingPos) in placedBuildings)
+        if (game != null)
         {
-            if (buildingPos == pos)
+            foreach (var building in game.Buildings)
             {
-                selected = pos;
-                Console.WriteLine($"Selected placed {type} at {pos}");
-                return;
+                if (building.Position == pos)
+                {
+                    selected = pos;
+                    Console.WriteLine($"Selected {building.Type} at {pos} ({building.State})");
+                    return;
+                }
             }
         }
 
@@ -453,7 +495,7 @@ public sealed class MainWindow : IDisposable
     /// <summary>Places the current building type at the given position.</summary>
     void PlaceBuilding(Position pos)
     {
-        if (gameMap == null)
+        if (gameMap == null || game == null)
             return;
 
         // Do not place on water or on an existing building.
@@ -467,8 +509,8 @@ public sealed class MainWindow : IDisposable
             return;
         }
 
-        placedBuildings.Add((buildType, pos));
-        Console.WriteLine($"Placed {buildType} at {pos}");
+        var building = game.PlaceBuilding(buildType, pos, 0);
+        Console.WriteLine($"Placed {building.Type} at {pos} ({building.State})");
     }
 
     /// <summary>Places a road cell at the given position.</summary>

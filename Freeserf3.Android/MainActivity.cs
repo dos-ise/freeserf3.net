@@ -37,7 +37,9 @@ public class MainActivity : SilkActivity
     static TerrainRenderer? terrain;
     static GameObjectRenderer? gameObjects;
     static Minimap? minimap;
+    static HudRenderer? hud;
     static Map? gameMap;
+    static Game? game;
     static GL? gl;
     static Vector2 cameraOffset;
     static float zoom = 1.0f;
@@ -183,6 +185,12 @@ public class MainActivity : SilkActivity
 
             gameMap = Map.FromReader(map);
             minimap = new Minimap(State.Gl, gameMap);
+            hud = new HudRenderer(State.Gl);
+
+            // Start a new round: players, starting resources and population.
+            game = new Game(gameMap, 42);
+            game.StartGame();
+            Log.Debug(Tag, $"Round started: {game.Players.Count} players, target population {game.TargetPopulation}");
 
             int size = map.WidthHeight;
             cameraOffset = new Vector2(-(size - 1) * 4f, -(size - 1) * 4.5f);
@@ -215,6 +223,9 @@ public class MainActivity : SilkActivity
         gl.Viewport(0, 0, (uint)width, (uint)height);
         gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
+        // Advance the simulation (50 ticks per second).
+        game?.TickOnce();
+
         // Orthographic projection centered on the origin: the map center
         // (translated to (0,0) by the camera offset) lands in the middle of
         // the screen. Y grows downward (bottom=+h/2, top=-h/2) to match the
@@ -231,10 +242,32 @@ public class MainActivity : SilkActivity
         }
 
         minimap?.Draw(width, height);
+        hud?.Draw(width, height, BuildHudLines());
 
         var error = gl.GetError();
         if (error != GLEnum.NoError)
             Log.Error(Tag, $"GL error: {error}");
+    }
+
+    /// <summary>Builds the HUD text lines (resources, population, menu).</summary>
+    static List<string> BuildHudLines()
+    {
+        var lines = new List<string>();
+        if (game == null)
+            return lines;
+
+        var player = game.GetPlayer(0);
+        if (player == null)
+            return lines;
+
+        lines.Add($"POP {player.Population}/{game.TargetPopulation}  FREE {player.FreeSettlers}");
+        lines.Add($"PLANK {player.Inventory.Get(Material.Plank)}  STONE {player.Inventory.Get(Material.Stone)}");
+        lines.Add($"TRUNK {player.Inventory.Get(Material.Trunk)}  BREAD {player.Inventory.Get(Material.Bread)}");
+
+        if (game.IsWon)
+            lines.Add("YOU WIN! POPULATION TARGET REACHED");
+
+        return lines;
     }
 
     /// <summary>Collects the sprites of the game objects for the current frame.</summary>
@@ -260,8 +293,22 @@ public class MainActivity : SilkActivity
             gameObjects.AddBuilding(type.Value, new Position(x, y), height);
         }
 
-        // Settlers placed on the map.
-        int frame = (int)(System.Environment.TickCount / 150) % 8;
+        // Buildings placed by the player (from the game simulation).
+        if (game != null)
+        {
+            foreach (var building in game.Buildings)
+            {
+                if (building.State == BuildingState.Destroyed)
+                    continue;
+                if (!gameMap.IsInBounds(building.Position))
+                    continue;
+                gameObjects.AddBuilding(building.Type, building.Position, gameMap.GetCell(building.Position).Height);
+            }
+        }
+
+        // Settlers placed on the map. The animation frame follows the game
+        // clock (or wall time before the game starts).
+        int frame = (int)((game?.Tick ?? (ulong)System.Environment.TickCount) / 10) % 8;
         foreach (var settler in gameMap.Settlers)
         {
             var pos = new Position(settler.PosX, settler.PosY);
@@ -356,6 +403,8 @@ public class MainActivity : SilkActivity
 
     static void Window_Closing()
     {
+        hud?.Dispose();
+        hud = null;
         minimap?.Dispose();
         minimap = null;
         gameObjects?.Dispose();

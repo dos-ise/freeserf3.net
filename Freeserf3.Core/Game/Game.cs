@@ -12,6 +12,8 @@
  * (at your option) any later version.
  */
 
+using System.Linq;
+
 namespace Freeserf3.Simulation;
 
 /// <summary>
@@ -41,6 +43,12 @@ public sealed class Game
     /// <summary>All buildings placed during play (not the map-file ones).</summary>
     public List<Building> Buildings { get; } = new();
 
+    /// <summary>Population needed to win the round.</summary>
+    public int TargetPopulation { get; set; } = 20;
+
+    /// <summary>Whether the round has been won.</summary>
+    public bool IsWon { get; private set; }
+
     /// <summary>Creates the players from the map's player info.</summary>
     public void CreatePlayers()
     {
@@ -56,6 +64,36 @@ public sealed class Game
             };
             Players.Add(player);
         }
+    }
+
+    /// <summary>
+    /// Starts a new round: creates the players, gives them starting
+    /// resources and sets the initial population from the map's settlers.
+    /// </summary>
+    public void StartGame()
+    {
+        CreatePlayers();
+        Buildings.Clear();
+        IsWon = false;
+
+        foreach (var player in Players)
+        {
+            // Starting stock so the first buildings can be constructed.
+            player.Inventory.Set(Material.Plank, 10);
+            player.Inventory.Set(Material.Stone, 10);
+
+            // The map's settlers of this player form the initial population.
+            int count = Map.Settlers.Count(s => s.Party == player.Index);
+            player.Population = count;
+            player.FreeSettlers = count;
+        }
+
+        // The win target is the starting population plus a growth goal, so
+        // the round is not won immediately on maps with many pre-placed
+        // settlers.
+        var human = GetPlayer(0);
+        if (human != null)
+            TargetPopulation = human.Population + 20;
     }
 
     /// <summary>Gets the player with the given index, or null.</summary>
@@ -77,7 +115,8 @@ public sealed class Game
 
     /// <summary>
     /// Advances the game by one tick. The clock is incremented and all
-    /// buildings are simulated (construction and production).
+    /// buildings are simulated (construction, worker assignment and
+    /// production); living houses grow the population.
     /// </summary>
     public void TickOnce()
     {
@@ -85,7 +124,55 @@ public sealed class Game
 
         foreach (var building in Buildings)
         {
-            building.Tick(GetPlayer(building.Player));
+            var player = GetPlayer(building.Player);
+            building.Tick(player);
+
+            // A finished building gets a worker from the free settlers.
+            if (building.State == BuildingState.Active
+                && !building.HasWorker
+                && building.Definition.NeedsWorker
+                && player != null
+                && player.FreeSettlers > 0)
+            {
+                player.FreeSettlers--;
+                building.AssignWorker(building.Definition.Worker);
+            }
+
+            // Produced goods go straight to the player's stock (transport
+            // via carriers is a later milestone).
+            if (player != null && building.Output.TotalCount > 0)
+            {
+                foreach (var (material, count) in building.Output.NonEmpty())
+                {
+                    player.Inventory.Add(material, count);
+                    building.Output.Remove(material, count);
+                }
+            }
+        }
+
+        // Living houses grow the population over time.
+        if (Tick % 600 == 0)
+        {
+            foreach (var building in Buildings)
+            {
+                if (building.State != BuildingState.Active || !building.Definition.IsLivinghouse)
+                    continue;
+
+                var player = GetPlayer(building.Player);
+                if (player == null)
+                    continue;
+
+                player.Population++;
+                player.FreeSettlers++;
+            }
+        }
+
+        // Win condition: the first player to reach the target population.
+        if (!IsWon)
+        {
+            var human = GetPlayer(0);
+            if (human != null && human.Population >= TargetPopulation)
+                IsWon = true;
         }
     }
 }
