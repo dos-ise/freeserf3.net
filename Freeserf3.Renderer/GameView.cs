@@ -49,6 +49,7 @@ public sealed class GameView : IDisposable
     Minimap? minimap;
     int minimapUpdateCounter;
     ControlPanel? controlPanel;
+    MainMenu? menu;
     Map? gameMap;
     Game? game;
 
@@ -61,6 +62,7 @@ public sealed class GameView : IDisposable
     BuildingType buildType = BuildingType.Lumberjack;
     Position? selected;
     Vector2? mousePosition;
+    int lastScreenWidth, lastScreenHeight;
 
     public GameView(GameData gameData, Action<string>? log = null)
     {
@@ -89,12 +91,42 @@ public sealed class GameView : IDisposable
     /// <summary>Raised when the player chooses to exit the game.</summary>
     public event Action? ExitRequested;
 
+    /// <summary>Whether the start menu is currently shown.</summary>
+    public bool IsInMenu => menu != null && game == null;
+
     /// <summary>
-    /// Loads the map, creates the renderers and starts a new round. The
-    /// camera is centered on the map and fitted to the given screen size.
-    /// Returns false if the map or the game data could not be loaded.
+    /// Loads the game data and shows the start menu. The game itself is
+    /// started when the player picks a map. Returns false if the game data
+    /// could not be loaded.
     /// </summary>
     public bool Load(string? mapFile, int screenWidth, int screenHeight)
+    {
+        lastScreenWidth = screenWidth;
+        lastScreenHeight = screenHeight;
+
+        // The start menu is shown first; the game starts on map selection.
+        menu = new MainMenu(State.Gl);
+        menu.Load(gameData);
+        menu.SinglePlayerSelected += () => menu.ShowMapSelection();
+        menu.MapSelected += map => StartGame(map);
+        menu.MultiplayerSelected += () => log("Multiplayer not implemented yet.");
+        menu.OptionsSelected += () => log("Options not implemented yet.");
+        menu.ExitRequested += () => ExitRequested?.Invoke();
+
+        // If a map was given on the command line, start it directly.
+        if (mapFile != null)
+            StartGame(mapFile);
+
+        State.Gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        return true;
+    }
+
+    /// <summary>
+    /// Loads the given map, creates the renderers and starts a new round.
+    /// The camera is centered on the map and fitted to the given screen
+    /// size. Returns false if the map could not be loaded.
+    /// </summary>
+    public bool StartGame(string mapFile)
     {
         if (mapFile == null)
         {
@@ -181,8 +213,9 @@ public sealed class GameView : IDisposable
             ? $"Demo buildings: {string.Join(", ", demoBuildings.Select(b => $"{b.Type} at {b.Position}"))}"
             : "No positions for demo buildings found.");
 
-        CenterOnMap(screenWidth, screenHeight);
+        CenterOnMap(lastScreenWidth, lastScreenHeight);
         State.Gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        menu = null;
         return true;
     }
 
@@ -214,11 +247,18 @@ public sealed class GameView : IDisposable
     /// </summary>
     public void Render(int screenWidth, int screenHeight)
     {
-        if (terrain == null)
-            return;
-
         State.Gl.Viewport(0, 0, (uint)screenWidth, (uint)screenHeight);
         State.Gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+        // The start menu is drawn instead of the game while it is shown.
+        if (menu != null)
+        {
+            menu.Draw(screenWidth, screenHeight);
+            return;
+        }
+
+        if (terrain == null)
+            return;
 
         // Advance the simulation (once per frame per speed step), unless paused.
         if (!IsPaused)
@@ -282,6 +322,13 @@ public sealed class GameView : IDisposable
     /// </summary>
     public void HandleClick(Vector2 position, int screenWidth, int screenHeight)
     {
+        // Clicks on the start menu are handled by the menu.
+        if (menu != null)
+        {
+            menu.HandleClick(position);
+            return;
+        }
+
         if (gameMap == null || IsMenuOpen)
             return;
 
@@ -365,6 +412,8 @@ public sealed class GameView : IDisposable
     /// <summary>Releases all renderer resources.</summary>
     public void Dispose()
     {
+        menu?.Dispose();
+        menu = null;
         controlPanel?.Dispose();
         controlPanel = null;
         minimap?.Dispose();
