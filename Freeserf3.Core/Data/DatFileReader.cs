@@ -82,6 +82,8 @@ public sealed class DatFileReader
     DatImage?[]? landscapeImages;
     DatImage?[]? guiImages;
     DatImage?[][]? settlerSequences;
+    DatImage?[][]? torsoSequences;
+    DatImage?[][]? shadowSequences;
     bool initialized;
 
     public DatFileReader(byte[] data, DatFileType type, string fileName)
@@ -139,6 +141,8 @@ public sealed class DatFileReader
         landscapeImages = new DatImage?[landscapeStarts.Length];
         guiImages = new DatImage?[guiStarts.Length];
         settlerSequences = new DatImage?[settlerStarts.Length][];
+        torsoSequences = new DatImage?[settlerStarts.Length][];
+        shadowSequences = new DatImage?[settlerStarts.Length][];
 
         // Align torsos and shadows to the settler count (see Java reference).
         if (torsoStarts.Length < settlerStarts.Length)
@@ -327,23 +331,55 @@ public sealed class DatFileReader
         if (torsoPosition >= 0)
         {
             long[] torsoPositions = ReadSequenceHeader(torsoPosition);
-            for (int i = 0; i < torsoPositions.Length && i < framePositions.Length; i++)
+            var torsos = new DatImage[Math.Min(torsoPositions.Length, framePositions.Length)];
+            for (int i = 0; i < torsos.Length; i++)
             {
-                GetImage(torsoPositions[i], HeaderType.Displaced, $"{fileName}-T{goldIndex}:{i}");
+                torsos[i] = GetImage(torsoPositions[i], HeaderType.Displaced, $"{fileName}-T{goldIndex}:{i}");
             }
+            torsoSequences![goldIndex] = torsos;
         }
 
         int shadowPosition = shadowStarts[goldIndex];
         if (shadowPosition >= 0)
         {
             long[] shadowPositions = ReadSequenceHeader(shadowPosition);
-            for (int i = 0; i < shadowPositions.Length && i < framePositions.Length; i++)
+            var shadows = new DatImage[Math.Min(shadowPositions.Length, framePositions.Length)];
+            for (int i = 0; i < shadows.Length; i++)
             {
-                GetImage(shadowPositions[i], HeaderType.Displaced, $"{fileName}-SH{goldIndex}:{i}");
+                shadows[i] = GetImage(shadowPositions[i], HeaderType.Displaced, $"{fileName}-SH{goldIndex}:{i}");
             }
+            shadowSequences![goldIndex] = shadows;
         }
 
         return images;
+    }
+
+    /// <summary>Gets the torso (color mask) frames of a settler sequence.</summary>
+    public DatImage[] GetSettlerTorsoSequence(int index)
+    {
+        Initialize();
+        if (index < 0 || index >= settlerStarts.Length)
+            return [];
+        if (settlerSequences![index] == null)
+        {
+            try { settlerSequences[index] = LoadSettlers(index); }
+            catch { settlerSequences[index] = []; }
+        }
+        return torsoSequences![index] ?? [];
+    }
+
+    /// <summary>Gets the shadow frames of a settler sequence.</summary>
+    public DatImage[] GetSettlerShadowSequence(int index)
+    {
+        Initialize();
+        if (index < 0 || index >= settlerStarts.Length)
+            return [];
+        if (settlerSequences![index] == null)
+        {
+            try { settlerSequences[index] = LoadSettlers(index); }
+            catch { settlerSequences[index] = []; }
+        }
+        return shadowSequences![index] ?? [];
     }
 
     long[] ReadSequenceHeader(int position)

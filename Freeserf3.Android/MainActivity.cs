@@ -171,7 +171,10 @@ public class MainActivity : SilkActivity
             if (buildingsGfx != null && settlersGfx != null)
             {
                 gameObjects = new GameObjectRenderer(State.Gl);
-                gameObjects.Load(buildingsGfx, settlersGfx);
+                var playerColors = map.Settlers.Select(s => (int)s.Party)
+                    .Concat(map.Buildings.Select(b => (int)b.Party))
+                    .Distinct();
+                gameObjects.Load(buildingsGfx, settlersGfx, playerColors);
             }
             else
             {
@@ -183,6 +186,11 @@ public class MainActivity : SilkActivity
 
             int size = map.WidthHeight;
             cameraOffset = new Vector2(-(size - 1) * 4f, -(size - 1) * 4.5f);
+
+            // Fit the whole map into the window.
+            float mapWidth = (size - 1) * 24f;
+            float mapHeight = (size - 1) * 9f;
+            zoom = MathF.Min(view.FramebufferSize.X / mapWidth, view.FramebufferSize.Y / mapHeight);
 
             State.Gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             Log.Debug(Tag, $"Framebuffer size: {view.FramebufferSize.X}x{view.FramebufferSize.Y}");
@@ -207,7 +215,11 @@ public class MainActivity : SilkActivity
         gl.Viewport(0, 0, (uint)width, (uint)height);
         gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-        var projection = Matrix4x4.CreateOrthographicOffCenter(0, width, height, 0, -1, 1);
+        // Orthographic projection centered on the origin: the map center
+        // (translated to (0,0) by the camera offset) lands in the middle of
+        // the screen. Y grows downward (bottom=-h/2, top=+h/2) to match the
+        // map geometry.
+        var projection = Matrix4x4.CreateOrthographicOffCenter(-width / 2, width / 2, -height / 2, height / 2, -1, 1);
         var viewMatrix = Matrix4x4.CreateTranslation(cameraOffset.X * zoom, cameraOffset.Y * zoom, 0);
         terrain.Draw(viewMatrix * projection, zoom);
 
@@ -255,7 +267,7 @@ public class MainActivity : SilkActivity
             var pos = new Position(settler.PosX, settler.PosY);
             if (!gameMap.IsInBounds(pos))
                 continue;
-            gameObjects.AddMovable(pos, gameMap.GetCell(pos).Height, frame);
+            gameObjects.AddMovable(pos, gameMap.GetCell(pos).Height, settler.Party, frame);
         }
 
         for (int y = 0; y < size; y++)

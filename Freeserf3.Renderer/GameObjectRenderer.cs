@@ -115,10 +115,23 @@ public sealed class GameObjectRenderer : IDisposable
     readonly SpriteRenderer sprites;
     readonly TextureAtlas atlas;
     readonly Dictionary<int, SpriteImage> buildingImages = new();
-    readonly Dictionary<int, SpriteImage[]> settlerImages = new();
+    readonly Dictionary<(int Color, int Sequence), SpriteImage[]> settlerImages = new();
     SpriteImage? flagImage;
     SpriteImage? roadImage;
     TextureRegion whiteRegion;
+
+    // Original settler colors (from settlers-remake MapDrawContext).
+    public static readonly (byte R, byte G, byte B)[] PlayerColors =
+    {
+        (0xF7, 0x10, 0x00), (0x10, 0x8C, 0xF7), (0xF7, 0xF7, 0x00), (0x29, 0xB5, 0x52),
+        (0xF7, 0x8C, 0x00), (0x00, 0xF7, 0xF7), (0xF7, 0x00, 0xF7), (0x29, 0x29, 0x29),
+        (0xF7, 0xF7, 0xF7), (0x00, 0x10, 0xF7), (0xCE, 0x4A, 0x10), (0x8C, 0x8C, 0x8C),
+        (0xAD, 0x08, 0xDE), (0x00, 0x6B, 0x00), (0xF7, 0xBD, 0xBD), (0x84, 0xEF, 0xA5),
+        (0x9C, 0x08, 0x31), (0xCE, 0x8C, 0xE7), (0xF7, 0xCE, 0x94), (0x8C, 0xBD, 0xEF),
+        (0xBA, 0xFF, 0x45), (0xCD, 0x09, 0x73), (0xD9, 0xF1, 0xAF), (0x6E, 0x00, 0x5F),
+        (0xA3, 0xC5, 0x03), (0x64, 0xB3, 0xB9), (0xB3, 0xF6, 0xFB), (0x8E, 0x59, 0x2B),
+        (0x8E, 0x88, 0x2B), (0xD9, 0xE0, 0xFF), (0xD4, 0xD4, 0xD4), (0xFF, 0x57, 0x8F)
+    };
 
     public GameObjectRenderer(GL gl)
     {
@@ -131,8 +144,10 @@ public sealed class GameObjectRenderer : IDisposable
     /// <summary>
     /// Loads the building/settler images. <paramref name="buildings"/> is
     /// dat file 13, <paramref name="settlers"/> the roman settler file (10).
+    /// <paramref name="playerColors"/> lists the player color indices that
+    /// appear on the map; only those settler tints are generated.
     /// </summary>
-    public void Load(DatFileReader buildings, DatFileReader settlers)
+    public void Load(DatFileReader buildings, DatFileReader settlers, IEnumerable<int> playerColors)
     {
         // Building sprites.
         foreach (var (type, sequence) in BuildingSequences)
@@ -152,17 +167,33 @@ public sealed class GameObjectRenderer : IDisposable
         if (flagDoor != null)
             flagImage = AddToAtlas(flagDoor);
 
-        // Settler walking sequences (bearer, no material).
+        // Settler walking sequences (bearer, no material), tinted per player
+        // color: the torso (color mask) is combined with the main image and
+        // the shadow.
+        var colors = playerColors.Distinct().Where(c => c >= 0 && c < PlayerColors.Length).ToList();
+        if (colors.Count == 0)
+            colors.Add(0);
+
         for (int sequence = 0; sequence < 8; sequence++)
         {
             var frames = settlers.GetSettlerSequence(sequence);
             if (frames.Length == 0)
                 continue;
 
-            var images = new SpriteImage[frames.Length];
-            for (int i = 0; i < frames.Length; i++)
-                images[i] = AddToAtlas(frames[i]);
-            settlerImages[sequence] = images;
+            var torsos = settlers.GetSettlerTorsoSequence(sequence);
+            var shadows = settlers.GetSettlerShadowSequence(sequence);
+
+            foreach (int color in colors)
+            {
+                var images = new SpriteImage[frames.Length];
+                for (int i = 0; i < frames.Length; i++)
+                {
+                    var torso = i < torsos.Length ? torsos[i] : null;
+                    var shadow = i < shadows.Length ? shadows[i] : null;
+                    images[i] = AddToAtlas(CombineSettler(frames[i], torso, shadow, PlayerColors[color]));
+                }
+                settlerImages[(color, sequence)] = images;
+            }
         }
 
         // Road texture (landscape image).
@@ -175,6 +206,113 @@ public sealed class GameObjectRenderer : IDisposable
     {
         var region = atlas.AddImage(image.Rgba, image.Width, image.Height);
         return new SpriteImage(region, image.Width, image.Height, image.OffsetX, image.OffsetY);
+    }
+
+    // Combines a settler frame: the torso (color mask) tinted with the
+    // player color, the main image on top and the shadow below, into a
+    // single RGBA image (mirrors settlers-remake SettlerImage).
+    static DatImage CombineSettler(DatImage image, DatImage? torso, DatImage? shadow, (byte R, byte G, byte B) color)
+    {
+        int minX = image.OffsetX;
+        int minY = image.OffsetY;
+        int maxX = image.OffsetX + image.Width;
+        int maxY = image.OffsetY + image.Height;
+
+        if (torso != null)
+        {
+            minX = Math.Min(minX, torso.OffsetX);
+            minY = Math.Min(minY, torso.OffsetY);
+            maxX = Math.Max(maxX, torso.OffsetX + torso.Width);
+            maxY = Math.Max(maxY, torso.OffsetY + torso.Height);
+        }
+        if (shadow != null)
+        {
+            minX = Math.Min(minX, shadow.OffsetX);
+            minY = Math.Min(minY, shadow.OffsetY);
+            maxX = Math.Max(maxX, shadow.OffsetX + shadow.Width);
+            maxY = Math.Max(maxY, shadow.OffsetY + shadow.Height);
+        }
+
+        int width = maxX - minX;
+        int height = maxY - minY;
+        var rgba = new byte[width * height * 4];
+
+        void Blend(int x, int y, byte r, byte g, byte b, byte a)
+        {
+            if (x < 0 || x >= width || y < 0 || y >= height || a == 0)
+                return;
+            int index = (y * width + x) * 4;
+            if (a == 255)
+            {
+                rgba[index] = r;
+                rgba[index + 1] = g;
+                rgba[index + 2] = b;
+                rgba[index + 3] = 255;
+            }
+            else
+            {
+                // Alpha blend over the existing pixel.
+                int dstA = rgba[index + 3];
+                int outA = a + dstA * (255 - a) / 255;
+                if (outA == 0)
+                    return;
+                rgba[index] = (byte)((r * a + rgba[index] * dstA * (255 - a) / 255) / outA);
+                rgba[index + 1] = (byte)((g * a + rgba[index + 1] * dstA * (255 - a) / 255) / outA);
+                rgba[index + 2] = (byte)((b * a + rgba[index + 2] * dstA * (255 - a) / 255) / outA);
+                rgba[index + 3] = (byte)outA;
+            }
+        }
+
+        // Shadow (semi-transparent black).
+        if (shadow != null)
+        {
+            for (int y = 0; y < shadow.Height; y++)
+            {
+                for (int x = 0; x < shadow.Width; x++)
+                {
+                    int si = (y * shadow.Width + x) * 4;
+                    byte a = shadow.Rgba[si + 3];
+                    if (a == 0)
+                        continue;
+                    Blend(shadow.OffsetX - minX + x, shadow.OffsetY - minY + y, 0, 0, 0, a);
+                }
+            }
+        }
+
+        // Torso tinted with the player color (the torso is a grayscale mask).
+        if (torso != null)
+        {
+            for (int y = 0; y < torso.Height; y++)
+            {
+                for (int x = 0; x < torso.Width; x++)
+                {
+                    int si = (y * torso.Width + x) * 4;
+                    byte a = torso.Rgba[si + 3];
+                    if (a == 0)
+                        continue;
+                    // Use the blue channel as the tint intensity.
+                    int intensity = torso.Rgba[si + 2];
+                    Blend(torso.OffsetX - minX + x, torso.OffsetY - minY + y,
+                        (byte)(color.R * intensity / 255), (byte)(color.G * intensity / 255), (byte)(color.B * intensity / 255), a);
+                }
+            }
+        }
+
+        // Main image on top.
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                int si = (y * image.Width + x) * 4;
+                byte a = image.Rgba[si + 3];
+                if (a == 0)
+                    continue;
+                Blend(image.OffsetX - minX + x, image.OffsetY - minY + y,
+                    image.Rgba[si], image.Rgba[si + 1], image.Rgba[si + 2], a);
+            }
+        }
+
+        return new DatImage(width, height, minX, minY, rgba);
     }
 
     /// <summary>Clears the sprite list for a new frame.</summary>
@@ -198,9 +336,9 @@ public sealed class GameObjectRenderer : IDisposable
     /// Adds a settler sprite at the given position. <paramref name="frame"/>
     /// selects the animation frame of the walking sequence.
     /// </summary>
-    public void AddMovable(Position pos, int height, int frame = 0)
+    public void AddMovable(Position pos, int height, int playerColor, int frame = 0)
     {
-        if (!settlerImages.TryGetValue(0, out var frames) || frames.Length == 0)
+        if (!settlerImages.TryGetValue((playerColor, 0), out var frames) || frames.Length == 0)
             return;
 
         AddSprite(frames[frame % frames.Length], pos, height, 0.5f);

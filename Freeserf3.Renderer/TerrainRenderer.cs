@@ -133,14 +133,16 @@ public sealed class TerrainRenderer : IDisposable
             return area[gy * size + gx].Height;
         }
 
-        // Up triangle: (x, y+1), (x, y), (x+1, y+1)
+        // Up triangle: (x, y), (x, y+1), (x+1, y+1)
+        // (vertex order matches settlers-remake Background.java: the top
+        // vertex (x, y) gets the first texture coordinate)
         var leftUp = GetType(x, y + 1) ?? LandscapeType.Grass;
         var centerUp = GetType(x, y) ?? LandscapeType.Grass;
         var rightUp = GetType(x + 1, y + 1) ?? LandscapeType.Grass;
         int texUp = LandscapeMapping.GetTextureIndex(leftUp, centerUp, rightUp, (x * 37 + y * 17) & 1);
         AddTriangle(vertices, indices,
-            (x, y + 1, GetHeight(x, y + 1)),
             (x, y, GetHeight(x, y)),
+            (x, y + 1, GetHeight(x, y + 1)),
             (x + 1, y + 1, GetHeight(x + 1, y + 1)),
             texUp, true, leftUp == rightUp, leftUp == centerUp);
 

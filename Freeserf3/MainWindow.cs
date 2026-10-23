@@ -129,7 +129,10 @@ public sealed class MainWindow : IDisposable
         if (buildingsGfx != null && settlersGfx != null)
         {
             gameObjects = new GameObjectRenderer(State.Gl);
-            gameObjects.Load(buildingsGfx, settlersGfx);
+            var playerColors = map.Settlers.Select(s => (int)s.Party)
+                .Concat(map.Buildings.Select(b => (int)b.Party))
+                .Distinct();
+            gameObjects.Load(buildingsGfx, settlersGfx, playerColors);
             Console.WriteLine($"Buildings: {map.Buildings.Count}, settlers: {map.Settlers.Count}");
         }
         else
@@ -141,9 +144,17 @@ public sealed class MainWindow : IDisposable
         gameMap = Freeserf3.Simulation.Map.FromReader(map);
 
         // Center the camera on the map. The map's screen-space bounding box
-        // is x: [-(size-1)*8, (size-1)*16], y: [0, (size-1)*9].
+        // is x: [-(size-1)*8, (size-1)*16], y: [0, (size-1)*9]; its center
+        // is ((size-1)*4, (size-1)*4.5). The projection is centered on the
+        // origin, so translating the map center to (0,0) puts it in the
+        // middle of the screen.
         int size = map.WidthHeight;
         cameraOffset = new Vector2(-(size - 1) * 4f, -(size - 1) * 4.5f);
+
+        // Fit the whole map into the window.
+        float mapWidth = (size - 1) * 24f;
+        float mapHeight = (size - 1) * 9f;
+        zoom = MathF.Min(window.Size.X / mapWidth, window.Size.Y / mapHeight);
 
         Console.WriteLine("Controls: drag=pan, wheel=zoom, B=build, R=road, F=flag, T=next building, right-click=cancel, Esc=close");
 
@@ -209,7 +220,7 @@ public sealed class MainWindow : IDisposable
             var pos = new Position(settler.PosX, settler.PosY);
             if (!gameMap.IsInBounds(pos))
                 continue;
-            gameObjects.AddMovable(pos, gameMap.GetCell(pos).Height, frame);
+            gameObjects.AddMovable(pos, gameMap.GetCell(pos).Height, settler.Party, frame);
         }
 
         // Roads and flags from the cell state.
@@ -303,8 +314,11 @@ public sealed class MainWindow : IDisposable
         float width = window.Size.X;
         float height = window.Size.Y;
 
-        // Orthographic projection in screen pixels.
-        var projection = Matrix4x4.CreateOrthographicOffCenter(0, width, height, 0, -1, 1);
+        // Orthographic projection centered on the origin: the map center
+        // (translated to (0,0) by the camera offset) lands in the middle of
+        // the screen. Y grows downward (bottom=-h/2, top=+h/2) to match the
+        // map geometry.
+        var projection = Matrix4x4.CreateOrthographicOffCenter(-width / 2, width / 2, -height / 2, height / 2, -1, 1);
 
         // Camera translation (in map pixels, scaled by zoom).
         var view = Matrix4x4.CreateTranslation(cameraOffset.X * zoom, cameraOffset.Y * zoom, 0);
@@ -363,8 +377,10 @@ public sealed class MainWindow : IDisposable
     /// <summary>Converts a window position to a map grid position.</summary>
     Position MouseToGrid(Vector2 mousePos)
     {
-        float mapX = mousePos.X / zoom - cameraOffset.X;
-        float mapY = mousePos.Y / zoom - cameraOffset.Y;
+        // The projection is centered on the origin, so the window center
+        // corresponds to map pixel (0,0) before the camera offset.
+        float mapX = (mousePos.X - window.Size.X / 2f) / zoom - cameraOffset.X;
+        float mapY = (mousePos.Y - window.Size.Y / 2f) / zoom - cameraOffset.Y;
         return MapGeometry.ScreenToGrid(mapX, mapY);
     }
 
