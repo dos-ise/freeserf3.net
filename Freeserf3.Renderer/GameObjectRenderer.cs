@@ -118,12 +118,14 @@ public sealed class GameObjectRenderer : IDisposable
     readonly Dictionary<int, SpriteImage[]> settlerImages = new();
     SpriteImage? flagImage;
     SpriteImage? roadImage;
+    TextureRegion whiteRegion;
 
     public GameObjectRenderer(GL gl)
     {
         this.gl = gl;
         sprites = new SpriteRenderer(gl);
         atlas = new TextureAtlas(gl);
+        whiteRegion = atlas.AddImage(new byte[] { 255, 255, 255, 255 }, 1, 1);
     }
 
     /// <summary>
@@ -220,6 +222,14 @@ public sealed class GameObjectRenderer : IDisposable
             return;
 
         AddSprite(flagImage.Value, pos, height, 0.2f);
+    }
+
+    /// <summary>Adds a selection marker (semi-transparent quad) at the given position.</summary>
+    public void AddSelectionMarker(Position pos, int height)
+    {
+        var (mapX, mapY) = MapGeometry.GridToScreen(pos, height);
+        // A marker quad covering the cell, slightly above the terrain.
+        sprites.Add(new Sprite(whiteRegion, mapX - 8f, mapY - 8f, 16f, 16f, 0.9f, new Vector4(1f, 0.9f, 0.2f, 0.5f)));
     }
 
     void AddSprite(in SpriteImage image, Position pos, int height, float z)

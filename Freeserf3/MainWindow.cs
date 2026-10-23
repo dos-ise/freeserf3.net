@@ -18,6 +18,22 @@ using System.Numerics;
 
 namespace Freeserf3;
 
+/// <summary>The interaction modes of the map view.</summary>
+enum InteractionMode
+{
+    /// <summary>Click selects buildings; drag pans the camera.</summary>
+    Select,
+
+    /// <summary>Click places the selected building type.</summary>
+    Build,
+
+    /// <summary>Click places road cells.</summary>
+    Road,
+
+    /// <summary>Click places flags.</summary>
+    Flag
+}
+
 public sealed class MainWindow : IDisposable
 {
     readonly GameData gameData;
@@ -34,6 +50,12 @@ public sealed class MainWindow : IDisposable
     float zoom = 1.0f;
     bool dragging;
     Vector2 lastMouse;
+
+    // Interaction state.
+    InteractionMode mode = InteractionMode.Select;
+    BuildingType buildType = BuildingType.Lumberjack;
+    Position? selected;
+    readonly List<(BuildingType Type, Position Pos)> placedBuildings = new();
 
     public MainWindow(GameData gameData)
     {
@@ -123,6 +145,8 @@ public sealed class MainWindow : IDisposable
         int size = map.WidthHeight;
         cameraOffset = new Vector2(-(size - 1) * 4f, -(size - 1) * 8f);
 
+        Console.WriteLine("Controls: drag=pan, wheel=zoom, B=build, R=road, F=flag, T=next building, right-click=cancel, Esc=close");
+
         State.Gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     }
 
@@ -170,6 +194,14 @@ public sealed class MainWindow : IDisposable
             gameObjects.AddBuilding(type.Value, new Position(x, y), height);
         }
 
+        // Buildings placed by the player.
+        foreach (var (type, pos) in placedBuildings)
+        {
+            if (!gameMap.IsInBounds(pos))
+                continue;
+            gameObjects.AddBuilding(type, pos, gameMap.GetCell(pos).Height);
+        }
+
         // Roads and flags from the cell state.
         for (int y = 0; y < size; y++)
         {
@@ -183,6 +215,12 @@ public sealed class MainWindow : IDisposable
                 if (cell.HasFlag)
                     gameObjects.AddFlag(pos, cell.Height);
             }
+        }
+
+        // Selection marker.
+        if (selected is Position sel && gameMap.IsInBounds(sel))
+        {
+            gameObjects.AddSelectionMarker(sel, gameMap.GetCell(sel).Height);
         }
     }
 
@@ -283,6 +321,16 @@ public sealed class MainWindow : IDisposable
         if (button == MouseButton.Left || button == MouseButton.Right)
         {
             dragging = false;
+
+            // A click (no significant drag) performs the interaction.
+            var position = new Vector2(mouse.Position.X, mouse.Position.Y);
+            if (Vector2.Distance(position, lastMouse) < 4f)
+            {
+                if (button == MouseButton.Left)
+                    HandleLeftClick(position);
+                else
+                    HandleRightClick();
+            }
         }
     }
 
@@ -302,11 +350,157 @@ public sealed class MainWindow : IDisposable
         zoom = Math.Clamp(zoom * factor, 0.1f, 10.0f);
     }
 
+    /// <summary>Converts a window position to a map grid position.</summary>
+    Position MouseToGrid(Vector2 mousePos)
+    {
+        float mapX = mousePos.X / zoom - cameraOffset.X;
+        float mapY = mousePos.Y / zoom - cameraOffset.Y;
+        return MapGeometry.ScreenToGrid(mapX, mapY);
+    }
+
+    /// <summary>Handles a left click: select or place depending on the mode.</summary>
+    void HandleLeftClick(Vector2 mousePos)
+    {
+        if (gameMap == null)
+            return;
+
+        var pos = MouseToGrid(mousePos);
+        if (!gameMap.IsInBounds(pos))
+            return;
+
+        switch (mode)
+        {
+            case InteractionMode.Select:
+                SelectAt(pos);
+                break;
+            case InteractionMode.Build:
+                PlaceBuilding(pos);
+                break;
+            case InteractionMode.Road:
+                PlaceRoad(pos);
+                break;
+            case InteractionMode.Flag:
+                PlaceFlag(pos);
+                break;
+        }
+    }
+
+    /// <summary>Handles a right click: back to select mode.</summary>
+    void HandleRightClick()
+    {
+        if (mode != InteractionMode.Select)
+        {
+            mode = InteractionMode.Select;
+            Console.WriteLine("Mode: select");
+        }
+    }
+
+    /// <summary>Selects the building at the given position, if any.</summary>
+    void SelectAt(Position pos)
+    {
+        selected = null;
+
+        foreach (var (type, buildingPos) in placedBuildings)
+        {
+            if (buildingPos == pos)
+            {
+                selected = pos;
+                Console.WriteLine($"Selected placed {type} at {pos}");
+                return;
+            }
+        }
+
+        foreach (var building in gameMap!.Buildings)
+        {
+            if (building.PosX == pos.X && building.PosY == pos.Y)
+            {
+                selected = pos;
+                var type = BuildingTypeFromMap(building.BuildingType);
+                Console.WriteLine($"Selected {(type?.ToString() ?? "building")} at {pos}");
+                return;
+            }
+        }
+    }
+
+    /// <summary>Places the current building type at the given position.</summary>
+    void PlaceBuilding(Position pos)
+    {
+        if (gameMap == null)
+            return;
+
+        // Do not place on water or on an existing building.
+        var cell = gameMap.GetCell(pos);
+        var landscape = LandscapeMapping.FromMapValue(cell.Landscape);
+        if (landscape is LandscapeType.Water1 or LandscapeType.Water2 or LandscapeType.Water3
+            or LandscapeType.Water4 or LandscapeType.Water5 or LandscapeType.Water6
+            or LandscapeType.Water7 or LandscapeType.Water8)
+        {
+            Console.WriteLine("Cannot build on water.");
+            return;
+        }
+
+        placedBuildings.Add((buildType, pos));
+        Console.WriteLine($"Placed {buildType} at {pos}");
+    }
+
+    /// <summary>Places a road cell at the given position.</summary>
+    void PlaceRoad(Position pos)
+    {
+        if (gameMap == null)
+            return;
+
+        var modifier = new MapModifier(gameMap);
+        modifier.PlaceRoad(pos);
+        Console.WriteLine($"Road at {pos}");
+    }
+
+    /// <summary>Places a flag at the given position.</summary>
+    void PlaceFlag(Position pos)
+    {
+        if (gameMap == null)
+            return;
+
+        var modifier = new MapModifier(gameMap);
+        modifier.SetFlag(pos, true);
+        Console.WriteLine($"Flag at {pos}");
+    }
+
     void OnKeyDown(IKeyboard keyboard, Key key, int scancode)
     {
-        if (key == Key.Escape)
+        switch (key)
         {
-            window.Close();
+            case Key.Escape:
+                if (mode != InteractionMode.Select)
+                {
+                    mode = InteractionMode.Select;
+                    Console.WriteLine("Mode: select");
+                }
+                else
+                {
+                    window.Close();
+                }
+                break;
+            case Key.B:
+                mode = InteractionMode.Build;
+                Console.WriteLine($"Mode: build ({buildType})");
+                break;
+            case Key.R:
+                mode = InteractionMode.Road;
+                Console.WriteLine("Mode: road");
+                break;
+            case Key.F:
+                mode = InteractionMode.Flag;
+                Console.WriteLine("Mode: flag");
+                break;
+            case Key.T:
+                if (mode == InteractionMode.Build)
+                {
+                    var types = Enum.GetValues<BuildingType>();
+                    int index = (Array.IndexOf(types, buildType) + 1) % types.Length;
+                    buildType = types[index];
+                    Console.WriteLine($"Build type: {buildType}");
+                }
+                break;
         }
     }
 

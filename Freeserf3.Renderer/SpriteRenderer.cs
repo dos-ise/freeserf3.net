@@ -21,7 +21,7 @@ namespace Freeserf3.Renderer;
 /// <summary>A textured quad to be drawn.</summary>
 public readonly struct Sprite
 {
-    public Sprite(TextureRegion region, float x, float y, float width, float height, float z = 0f)
+    public Sprite(TextureRegion region, float x, float y, float width, float height, float z = 0f, Vector4 color = default)
     {
         Region = region;
         X = x;
@@ -29,6 +29,7 @@ public readonly struct Sprite
         Width = width;
         Height = height;
         Z = z;
+        Color = color == default ? Vector4.One : color;
     }
 
     public TextureRegion Region { get; }
@@ -37,6 +38,7 @@ public readonly struct Sprite
     public float Width { get; }
     public float Height { get; }
     public float Z { get; }
+    public Vector4 Color { get; }
 }
 
 /// <summary>
@@ -63,12 +65,14 @@ public sealed class SpriteRenderer : IDisposable
         gl.BindVertexArray(vao);
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
 
-        // Vertex layout: position (2 floats), uv (2 floats).
-        const uint stride = 4 * sizeof(float);
+        // Vertex layout: position (2 floats), uv (2 floats), color (4 floats).
+        const uint stride = 8 * sizeof(float);
         gl.EnableVertexAttribArray(0);
         gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, stride, 0);
         gl.EnableVertexAttribArray(1);
         gl.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, stride, 2 * sizeof(float));
+        gl.EnableVertexAttribArray(2);
+        gl.VertexAttribPointer(2, 4, VertexAttribPointerType.Float, false, stride, 4 * sizeof(float));
 
         gl.BindVertexArray(0);
     }
@@ -103,7 +107,7 @@ public sealed class SpriteRenderer : IDisposable
         // Sort by z-order (painter's algorithm).
         var sorted = sprites.OrderBy(s => s.Z).ToList();
 
-        var vertices = new List<float>(sorted.Count * 4 * 4);
+        var vertices = new List<float>(sorted.Count * 4 * 8);
         foreach (var sprite in sorted)
         {
             float x0 = sprite.X;
@@ -112,15 +116,15 @@ public sealed class SpriteRenderer : IDisposable
             float y1 = sprite.Y + sprite.Height;
 
             // Two triangles (quad).
-            AddVertex(vertices, x0, y0, sprite.Region.U0, sprite.Region.V0);
-            AddVertex(vertices, x1, y0, sprite.Region.U1, sprite.Region.V0);
-            AddVertex(vertices, x1, y1, sprite.Region.U1, sprite.Region.V1);
-            AddVertex(vertices, x0, y0, sprite.Region.U0, sprite.Region.V0);
-            AddVertex(vertices, x1, y1, sprite.Region.U1, sprite.Region.V1);
-            AddVertex(vertices, x0, y1, sprite.Region.U0, sprite.Region.V1);
+            AddVertex(vertices, x0, y0, sprite.Region.U0, sprite.Region.V0, sprite.Color);
+            AddVertex(vertices, x1, y0, sprite.Region.U1, sprite.Region.V0, sprite.Color);
+            AddVertex(vertices, x1, y1, sprite.Region.U1, sprite.Region.V1, sprite.Color);
+            AddVertex(vertices, x0, y0, sprite.Region.U0, sprite.Region.V0, sprite.Color);
+            AddVertex(vertices, x1, y1, sprite.Region.U1, sprite.Region.V1, sprite.Color);
+            AddVertex(vertices, x0, y1, sprite.Region.U0, sprite.Region.V1, sprite.Color);
         }
 
-        vertexCount = vertices.Count / 4;
+        vertexCount = vertices.Count / 8;
 
         gl.BindVertexArray(vao);
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
@@ -134,12 +138,16 @@ public sealed class SpriteRenderer : IDisposable
         gl.BindVertexArray(0);
     }
 
-    static void AddVertex(List<float> vertices, float x, float y, float u, float v)
+    static void AddVertex(List<float> vertices, float x, float y, float u, float v, Vector4 color)
     {
         vertices.Add(x);
         vertices.Add(y);
         vertices.Add(u);
         vertices.Add(v);
+        vertices.Add(color.X);
+        vertices.Add(color.Y);
+        vertices.Add(color.Z);
+        vertices.Add(color.W);
     }
 
     static ShaderProgram CreateShader(GL gl)
@@ -150,22 +158,26 @@ public sealed class SpriteRenderer : IDisposable
         string vertexSource = $@"{version}
 in vec2 aPosition;
 in vec2 aUv;
+in vec4 aColor;
 
 uniform mat4 uViewProjection;
 uniform float uZoom;
 
 out vec2 vUv;
+out vec4 vColor;
 
 void main()
 {{
     vec4 pos = vec4(aPosition * uZoom, 0.0, 1.0);
     gl_Position = uViewProjection * pos;
     vUv = aUv;
+    vColor = aColor;
 }}
 ";
 
         string fragmentSource = $@"{version}
 {precision}in vec2 vUv;
+in vec4 vColor;
 
 uniform sampler2D uTexture;
 
@@ -173,7 +185,7 @@ out vec4 fragColor;
 
 void main()
 {{
-    fragColor = texture(uTexture, vUv);
+    fragColor = texture(uTexture, vUv) * vColor;
 }}
 ";
 
