@@ -27,7 +27,7 @@ using System.Numerics;
 
 namespace Freeserf3.Android;
 
-[Activity(Label = "freeserf3.net", MainLauncher = true, ScreenOrientation = global::Android.Content.PM.ScreenOrientation.Landscape, Exported = true)]
+[Activity(Label = "freeserf3.net", ScreenOrientation = global::Android.Content.PM.ScreenOrientation.Landscape, Exported = true)]
 public class MainActivity : SilkActivity
 {
     const string Tag = "Freeserf3";
