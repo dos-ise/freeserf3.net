@@ -80,6 +80,9 @@ public sealed class GameObjectRenderer : IDisposable
     /// <summary>Lumberjack working sequence (ACTION1) in the settler file (from settlers-remake movables.txt).</summary>
     public const int LumberjackWorkSequence = 30;
 
+    /// <summary>Forester working sequence (ACTION1) in the settler file (from settlers-remake movables.txt).</summary>
+    public const int ForesterWorkSequence = 36;
+
     /// <summary>Stack sprite sequence per material in the objects file (from settlers-remake EMaterialType).</summary>
     public static readonly Dictionary<Material, int> StackSequences = new()
     {
@@ -282,8 +285,9 @@ public sealed class GameObjectRenderer : IDisposable
         }
 
         // Working sequences of the resource workers (from settlers-remake
-        // movables.txt): stonecutter ACTION1 = 25, lumberjack ACTION1 = 30.
-        foreach (int sequence in new[] { StonecutterWorkSequence, LumberjackWorkSequence })
+        // movables.txt): stonecutter ACTION1 = 25, lumberjack ACTION1 = 30,
+        // forester ACTION1 = 36.
+        foreach (int sequence in new[] { StonecutterWorkSequence, LumberjackWorkSequence, ForesterWorkSequence })
         {
             var frames = settlers.GetSettlerSequence(sequence);
             if (frames.Length == 0)
@@ -571,7 +575,12 @@ public sealed class GameObjectRenderer : IDisposable
     /// </summary>
     public void AddWorkingMovable(Position pos, int height, int playerColor, int frame, Direction direction, WorkerType profession)
     {
-        int sequence = profession == WorkerType.Stonecutter ? StonecutterWorkSequence : LumberjackWorkSequence;
+        int sequence = profession switch
+        {
+            WorkerType.Stonecutter => StonecutterWorkSequence,
+            WorkerType.Forester => ForesterWorkSequence,
+            _ => LumberjackWorkSequence
+        };
         if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
             return;
 

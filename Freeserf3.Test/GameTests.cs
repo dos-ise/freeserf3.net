@@ -311,6 +311,26 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void ForesterPlantsTree()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        int treesBefore = game.Trees.Count;
+        var building = game.PlaceBuilding(BuildingType.Forester, new Position(4, 4), 0);
+        for (int i = 0; i < 5000 && game.Trees.Count <= treesBefore; i++)
+            game.TickOnce();
+
+        Assert.IsTrue(game.Trees.Count > treesBefore, "Forester should have planted a tree");
+        Assert.AreEqual(BuildingState.Active, building.State);
+    }
+
+    [TestMethod]
     public void ProductionTransfersToPlayerInventory()
     {
         var map = new Map(8);

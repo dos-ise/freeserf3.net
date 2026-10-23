@@ -257,11 +257,19 @@ public sealed class Game
         var walkable = GetWalkableArea(player.StartPosition);
 
         // The lumberjack goes near a tree, the stonecutter and sawmill on
-        // walkable cells of the area.
+        // walkable cells of the area, the forester near an empty spot.
         var lumberPos = FindDemoPosition(walkable, player.StartPosition, p => FindNearestTree(p, 10) != null);
         if (lumberPos.HasValue)
         {
             var building = PlaceBuilding(BuildingType.Lumberjack, lumberPos.Value, 0);
+            if (building != null)
+                placed.Add(building);
+        }
+
+        var foresterPos = FindDemoPosition(walkable, player.StartPosition, p => FindNearestTree(p, 10) == null);
+        if (foresterPos.HasValue)
+        {
+            var building = PlaceBuilding(BuildingType.Forester, foresterPos.Value, 0);
             if (building != null)
                 placed.Add(building);
         }
@@ -551,6 +559,17 @@ public sealed class Game
         Stones.Remove(position);
     }
 
+    /// <summary>Plants a new tree on the map (forester).</summary>
+    public void PlantTree(Position position)
+    {
+        if (!Map.IsInBounds(position))
+            return;
+        Trees.Add(position);
+        var cell = Map.GetCell(position);
+        cell.MapObject = 68; // birch tree
+        Map.SetCell(position, cell);
+    }
+
     /// <summary>Gets the stock flag of the given player, or null.</summary>
     public Flag? GetStockFlag(int player)
     {
@@ -794,7 +813,7 @@ public sealed class Game
                     break;
 
                 case ResourceWorkerState.Working:
-                    // Face the tree/stone while cutting/mining.
+                    // Face the tree/stone while cutting/mining/planting.
                     if (worker.ResourceTarget is Position resourceTarget)
                     {
                         var facing = worker.Position.GetDirectionTo(resourceTarget);
@@ -805,15 +824,24 @@ public sealed class Game
                     if (worker.WorkTicks < ResourceWorkTicks)
                         break;
 
-                    // Cut the tree or mine the stone and produce the output.
+                    // Cut the tree, mine the stone or plant a new tree.
                     var target = worker.ResourceTarget;
                     if (target.HasValue)
                     {
                         if (building.Definition.Worker == WorkerType.Lumberjack)
+                        {
                             CutTree(target.Value);
+                            building.ProduceResource();
+                        }
                         else if (building.Definition.Worker == WorkerType.Stonecutter)
+                        {
                             MineStone(target.Value);
-                        building.ProduceResource();
+                            building.ProduceResource();
+                        }
+                        else if (building.Definition.Worker == WorkerType.Forester)
+                        {
+                            PlantTree(target.Value);
+                        }
                     }
                     var home = building.Flag?.Position ?? building.Position;
                     var homePath = Pathfinder.FindPath(Map, worker.Position, home, IsWalkable);
@@ -852,7 +880,8 @@ public sealed class Game
     /// <summary>
     /// Finds the next tree or stone for the building's worker within the
     /// building's work radius, or null if none is left. Only reachable
-    /// resources are considered (like settlers-remake preSearchPath).
+    /// resources are considered (like settlers-remake preSearchPath). The
+    /// forester looks for an empty walkable cell to plant a tree instead.
     /// </summary>
     Position? FindResourceFor(Building building, Position workerPosition)
     {
@@ -861,7 +890,15 @@ public sealed class Game
             return Pathfinder.FindNearest(Map, workerPosition, (m, p) => Trees.Contains(p), radius, IsWalkable);
         if (building.Definition.Worker == WorkerType.Stonecutter)
             return Pathfinder.FindNearest(Map, workerPosition, (m, p) => Stones.Contains(p), radius, IsWalkable);
+        if (building.Definition.Worker == WorkerType.Forester)
+            return Pathfinder.FindNearest(Map, workerPosition, (m, p) => IsPlantable(p) && p != workerPosition, radius, IsWalkable);
         return null;
+    }
+
+    /// <summary>Whether a tree can be planted on the cell (walkable and free).</summary>
+    bool IsPlantable(Position pos)
+    {
+        return !Trees.Contains(pos) && !Stones.Contains(pos) && !IsBuildingAt(pos);
     }
 
     /// <summary>Releases a resource worker: it becomes a free settler again.</summary>

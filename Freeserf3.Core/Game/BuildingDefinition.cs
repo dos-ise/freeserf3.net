@@ -128,7 +128,7 @@ public sealed class BuildingDefinition
 
         Add(new BuildingDefinition(BuildingType.Forester, WorkerType.Forester,
             new[] { (Material.Stone, 1), (Material.Plank, 3) },
-            workRadius: 18, productionTime: 900));
+            workRadius: 18, isResourceProducer: true, productionTime: 900));
 
         Add(new BuildingDefinition(BuildingType.Lumberjack, WorkerType.Lumberjack,
             new[] { (Material.Stone, 2), (Material.Plank, 2) },
