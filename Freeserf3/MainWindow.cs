@@ -70,12 +70,13 @@ public sealed class MainWindow : IDisposable
         input.Keyboards[0].KeyDown += OnKeyDown;
 
         gameView = new GameView(gameData, Console.WriteLine);
+        gameView.ExitRequested += () => window.Close();
         if (!gameView.Load(Program.MapFile, window.Size.X, window.Size.Y))
         {
             throw new InvalidOperationException("Failed to load the game.");
         }
 
-        Console.WriteLine("Controls: drag=pan, wheel=zoom, B=build, R=road, F=flag, T=next building, right-click=cancel, Esc=close");
+        Console.WriteLine("Controls: drag=pan, wheel=zoom, B=build, R=road, F=flag, T=next building, right-click=cancel, Esc=menu/close");
     }
 
     void OnRender(double deltaTime)
@@ -152,7 +153,9 @@ public sealed class MainWindow : IDisposable
         switch (key)
         {
             case Key.Escape:
-                if (gameView.Mode != InteractionMode.Select)
+                if (gameView.IsMenuOpen)
+                    gameView.CloseMenu();
+                else if (gameView.Mode != InteractionMode.Select)
                     gameView.CancelMode();
                 else
                     window.Close();

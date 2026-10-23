@@ -76,6 +76,15 @@ public sealed class GameView : IDisposable
     /// <summary>The building type placed in build mode.</summary>
     public BuildingType BuildType => buildType;
 
+    /// <summary>Whether the in-game menu is currently open.</summary>
+    public bool IsMenuOpen => controlPanel?.SystemMenuVisible == true;
+
+    /// <summary>Whether the simulation is paused (in-game menu).</summary>
+    public bool IsPaused { get; private set; }
+
+    /// <summary>Raised when the player chooses to exit the game.</summary>
+    public event Action? ExitRequested;
+
     /// <summary>
     /// Loads the map, creates the renderers and starts a new round. The
     /// camera is centered on the map and fitted to the given screen size.
@@ -142,6 +151,11 @@ public sealed class GameView : IDisposable
         controlPanel.Load(gameData);
         controlPanel.BuildingSelected += OnBuildingSelected;
         controlPanel.SystemButtonClicked += OnSystemButtonClicked;
+        controlPanel.PauseRequested += OnPauseRequested;
+        controlPanel.MusicRequested += () => log("Music toggle not implemented yet.");
+        controlPanel.SaveRequested += () => log("Save not implemented yet.");
+        controlPanel.ExitRequested += OnMenuExitRequested;
+        controlPanel.CancelRequested += OnCancelRequested;
 
         // Start a new round: players, starting resources and population.
         game = new Game(gameMap, 42);
@@ -194,8 +208,9 @@ public sealed class GameView : IDisposable
         State.Gl.Viewport(0, 0, (uint)screenWidth, (uint)screenHeight);
         State.Gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-        // Advance the simulation (once per frame).
-        game?.TickOnce();
+        // Advance the simulation (once per frame), unless paused.
+        if (!IsPaused)
+            game?.TickOnce();
 
         var viewProjection = CreateViewProjection(screenWidth, screenHeight);
         terrain.Draw(viewProjection, zoom);
@@ -246,7 +261,7 @@ public sealed class GameView : IDisposable
     /// </summary>
     public void HandleClick(Vector2 position, int screenWidth, int screenHeight)
     {
-        if (gameMap == null)
+        if (gameMap == null || IsMenuOpen)
             return;
 
         var pos = MouseToGrid(position, screenWidth, screenHeight);
@@ -347,10 +362,67 @@ public sealed class GameView : IDisposable
         log($"Mode: build ({buildType})");
     }
 
-    /// <summary>The system (computer) button opens the in-game menu.</summary>
+    /// <summary>
+    /// The system (computer) button toggles the in-game menu. Opening the
+    /// menu cancels any build mode and pauses the game; closing it resumes.
+    /// </summary>
     void OnSystemButtonClicked()
     {
-        log("System button clicked (in-game menu)");
+        if (controlPanel?.SystemMenuVisible == true)
+        {
+            if (mode != InteractionMode.Select)
+            {
+                mode = InteractionMode.Select;
+                controlPanel.ClearSelection();
+            }
+            IsPaused = true;
+            controlPanel.IsPaused = true;
+            log("In-game menu opened (paused)");
+        }
+        else
+        {
+            IsPaused = false;
+            controlPanel.IsPaused = false;
+            log("In-game menu closed (resumed)");
+        }
+    }
+
+    /// <summary>The Pause button toggles the pause state.</summary>
+    void OnPauseRequested()
+    {
+        IsPaused = !IsPaused;
+        if (controlPanel != null)
+            controlPanel.IsPaused = IsPaused;
+        log(IsPaused ? "Game paused" : "Game resumed");
+    }
+
+    /// <summary>The Cancel button closes the menu and resumes the game.</summary>
+    void OnCancelRequested()
+    {
+        controlPanel?.CloseSystemMenu();
+        IsPaused = false;
+        controlPanel.IsPaused = false;
+        log("In-game menu closed (resumed)");
+    }
+
+    /// <summary>The Exit button requests to leave the game.</summary>
+    void OnMenuExitRequested()
+    {
+        log("Exit requested");
+        ExitRequested?.Invoke();
+    }
+
+    /// <summary>Closes the in-game menu (e.g. via the Escape key).</summary>
+    public void CloseMenu()
+    {
+        if (IsMenuOpen)
+        {
+            controlPanel?.CloseSystemMenu();
+            IsPaused = false;
+            if (controlPanel != null)
+                controlPanel.IsPaused = false;
+            log("In-game menu closed (resumed)");
+        }
     }
 
     /// <summary>Collects the sprites of the game objects for the current frame.</summary>

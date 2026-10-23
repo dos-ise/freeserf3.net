@@ -56,6 +56,7 @@ public sealed class ControlPanel : IDisposable
     const int LowerSignpostInactive = 117, LowerSignpostActive = 105;
     const int LowerPotsInactive = 120, LowerPotsActive = 108;
     const int ActiveMark = 123;
+    const int LabeledButtonInactive = 324, LabeledButtonActive = 327;
 
     // Settler sequences in the panel file.
     const int PanelBackgroundSequence = 2;
@@ -138,12 +139,16 @@ public sealed class ControlPanel : IDisposable
     readonly TextureRegion[] secondaryTabs = new TextureRegion[8];
     readonly TextureRegion[] systemButton = new TextureRegion[2];
     readonly TextureRegion[] lowerTabs = new TextureRegion[8];
+    readonly TextureRegion[] labeledButton = new TextureRegion[2];
     TextureRegion activeMark = null!;
+    TextureRegion whiteRegion = null!;
     readonly Dictionary<BuildingType, TextureRegion> buildingIcons = new();
 
     int primaryTab;      // 0 = build, 1 = goods, 2 = settlers
     int secondaryTab;    // 0 = normal, 1 = food, 2 = military, 3 = social
     BuildingType? selectedBuilding;
+    bool systemMenuVisible;
+    bool isPaused;
 
     float scale = 1f;
 
@@ -154,6 +159,21 @@ public sealed class ControlPanel : IDisposable
 
     /// <summary>Raised when the system (computer) button is clicked.</summary>
     public event Action? SystemButtonClicked;
+
+    /// <summary>Raised when the Pause button of the in-game menu is clicked.</summary>
+    public event Action? PauseRequested;
+
+    /// <summary>Raised when the Music button of the in-game menu is clicked.</summary>
+    public event Action? MusicRequested;
+
+    /// <summary>Raised when the Save button of the in-game menu is clicked.</summary>
+    public event Action? SaveRequested;
+
+    /// <summary>Raised when the Exit button of the in-game menu is clicked.</summary>
+    public event Action? ExitRequested;
+
+    /// <summary>Raised when the Cancel button of the in-game menu is clicked.</summary>
+    public event Action? CancelRequested;
 
     public ControlPanel(GL gl)
     {
@@ -196,7 +216,13 @@ public sealed class ControlPanel : IDisposable
         AddButtonPair(lowerTabs, 4, LowerSignpostInactive, LowerSignpostActive, buttons);
         AddButtonPair(lowerTabs, 6, LowerPotsInactive, LowerPotsActive, buttons);
 
+        // Labeled buttons of the in-game menu (settlers-remake LabeledButton).
+        AddButtonPair(labeledButton, 0, LabeledButtonInactive, LabeledButtonActive, buttons);
+
         activeMark = AddImage(buttons.GetGui(ActiveMark)!);
+
+        // 1x1 white pixel used to draw menu text as tinted quads.
+        whiteRegion = AddImage(new DatImage(1, 1, 0, 0, new byte[] { 255, 255, 255, 255 }));
 
         // Building icons.
         foreach (var (type, gui) in NormalBuildings.Concat(FoodBuildings)
@@ -223,6 +249,22 @@ public sealed class ControlPanel : IDisposable
     public void ClearSelection()
     {
         selectedBuilding = null;
+    }
+
+    /// <summary>Whether the in-game menu is shown in the content area.</summary>
+    public bool SystemMenuVisible => systemMenuVisible;
+
+    /// <summary>Whether the game is paused (drives the Pause button state).</summary>
+    public bool IsPaused
+    {
+        get => isPaused;
+        set => isPaused = value;
+    }
+
+    /// <summary>Closes the in-game menu without raising an event.</summary>
+    public void CloseSystemMenu()
+    {
+        systemMenuVisible = false;
     }
 
     /// <summary>The screen rectangle of the minimap (for the minimap renderer).</summary>
@@ -261,43 +303,53 @@ public sealed class ControlPanel : IDisposable
             float y = MiniMapHeight + 9f;
             bool active = i == primaryTab;
             AddSprite(primaryTabs[i * 2 + (active ? 1 : 0)], x, y, PrimaryTabWidth, PrimaryTabHeight);
-            AddClickRegion(x, y, PrimaryTabWidth, PrimaryTabHeight, () => SetPrimaryTab(i));
+            if (!systemMenuVisible)
+                AddClickRegion(x, y, PrimaryTabWidth, PrimaryTabHeight, () => SetPrimaryTab(i));
         }
 
-        // Secondary tabs.
-        for (int i = 0; i < 4; i++)
+        if (systemMenuVisible)
         {
-            float x = SecondaryTabLeft + i * (SecondaryTabWidth + SecondaryTabSpacing);
-            float y = MiniMapHeight + 64f;
-            bool active = i == secondaryTab;
-            AddSprite(secondaryTabs[i * 2 + (active ? 1 : 0)], x, y, SecondaryTabWidth, SecondaryTabHeight);
-            AddClickRegion(x, y, SecondaryTabWidth, SecondaryTabHeight, () => SetSecondaryTab(i));
+            // The in-game menu replaces the building selection in the content
+            // area (settlers-remake gamePanel layout).
+            DrawSystemMenu();
         }
-
-        // Building buttons in the content pane (2 columns x 6 rows).
-        var buildings = CurrentBuildings();
-        float cellWidth = ContentWidth / ContentColumns;
-        float cellHeight = ContentHeight / ContentRows;
-        for (int i = 0; i < buildings.Length; i++)
+        else
         {
-            var (type, _) = buildings[i];
-            int col = i % ContentColumns;
-            int row = i / ContentColumns;
-            float x = ContentLeft + col * cellWidth;
-            float y = MiniMapHeight + ContentTop + row * cellHeight;
+            // Secondary tabs.
+            for (int i = 0; i < 4; i++)
+            {
+                float x = SecondaryTabLeft + i * (SecondaryTabWidth + SecondaryTabSpacing);
+                float y = MiniMapHeight + 64f;
+                bool active = i == secondaryTab;
+                AddSprite(secondaryTabs[i * 2 + (active ? 1 : 0)], x, y, SecondaryTabWidth, SecondaryTabHeight);
+                AddClickRegion(x, y, SecondaryTabWidth, SecondaryTabHeight, () => SetSecondaryTab(i));
+            }
 
-            if (buildingIcons.TryGetValue(type, out var icon))
-                AddCentered(icon, x, y, cellWidth, cellHeight);
+            // Building buttons in the content pane (2 columns x 6 rows).
+            var buildings = CurrentBuildings();
+            float cellWidth = ContentWidth / ContentColumns;
+            float cellHeight = ContentHeight / ContentRows;
+            for (int i = 0; i < buildings.Length; i++)
+            {
+                var (type, _) = buildings[i];
+                int col = i % ContentColumns;
+                int row = i / ContentColumns;
+                float x = ContentLeft + col * cellWidth;
+                float y = MiniMapHeight + ContentTop + row * cellHeight;
 
-            if (type == selectedBuilding)
-                AddCentered(activeMark, x, y, cellWidth, cellHeight);
+                if (buildingIcons.TryGetValue(type, out var icon))
+                    AddCentered(icon, x, y, cellWidth, cellHeight);
 
-            AddClickRegion(x, y, cellWidth, cellHeight, () => SelectBuilding(type));
+                if (type == selectedBuilding)
+                    AddCentered(activeMark, x, y, cellWidth, cellHeight);
+
+                AddClickRegion(x, y, cellWidth, cellHeight, () => SelectBuilding(type));
+            }
         }
 
-        // System (computer) button.
-        AddSprite(systemButton[0], SystemLeft, MiniMapHeight + SystemTop, SystemWidth, SystemHeight);
-        AddClickRegion(SystemLeft, MiniMapHeight + SystemTop, SystemWidth, SystemHeight, () => SystemButtonClicked?.Invoke());
+        // System (computer) button toggles the in-game menu.
+        AddSprite(systemButton[systemMenuVisible ? 1 : 0], SystemLeft, MiniMapHeight + SystemTop, SystemWidth, SystemHeight);
+        AddClickRegion(SystemLeft, MiniMapHeight + SystemTop, SystemWidth, SystemHeight, ToggleSystemMenu);
 
         // Lower tab bar (scroll, swords, signpost, pots).
         for (int i = 0; i < 4; i++)
@@ -336,6 +388,75 @@ public sealed class ControlPanel : IDisposable
     {
         selectedBuilding = type;
         BuildingSelected?.Invoke(type);
+    }
+
+    void ToggleSystemMenu()
+    {
+        systemMenuVisible = !systemMenuVisible;
+        SystemButtonClicked?.Invoke();
+    }
+
+    /// <summary>
+    /// Draws the in-game menu in the content area. The buttons follow the
+    /// settlers-remake gamePanel layout: relative positions within the
+    /// content pane (y grows up in the reference), labeled buttons with the
+    /// standard button background and centered text.
+    /// </summary>
+    void DrawSystemMenu()
+    {
+        float contentX = ContentLeft;
+        float contentY = MiniMapHeight + ContentTop;
+        float contentW = ContentWidth;
+        float contentH = ContentHeight;
+
+        AddMenuButton("PAUSE", contentX, contentY, contentW, contentH, 0.90f, 1.00f, isPaused, () => PauseRequested?.Invoke());
+        AddMenuButton("MUSIC", contentX, contentY, contentW, contentH, 0.75f, 0.85f, false, () => MusicRequested?.Invoke());
+        AddMenuButton("SAVE", contentX, contentY, contentW, contentH, 0.34f, 0.44f, false, () => SaveRequested?.Invoke());
+        AddMenuButton("EXIT", contentX, contentY, contentW, contentH, 0.22f, 0.32f, false, () => ExitRequested?.Invoke());
+        AddMenuButton("CANCEL", contentX, contentY, contentW, contentH, 0.10f, 0.20f, false, () => CancelRequested?.Invoke());
+    }
+
+    void AddMenuButton(string label, float contentX, float contentY, float contentW, float contentH, float bottom, float top, bool active, Action action)
+    {
+        // The reference uses bottom-up relative coordinates within the pane.
+        float x = contentX + contentW * 0.1f;
+        float y = contentY + contentH * (1f - top);
+        float w = contentW * 0.8f;
+        float h = contentH * (top - bottom);
+
+        AddSprite(labeledButton[active ? 1 : 0], x, y, w, h);
+        AddClickRegion(x, y, w, h, action);
+        DrawLabelCentered(label, x, y, w, h);
+    }
+
+    void DrawLabelCentered(string text, float x, float y, float width, float height)
+    {
+        // Render the label with the 5x7 bitmap font, centered on the button.
+        const float glyphW = 3f, glyphH = 4f;
+        float textW = text.Length * glyphW * 5f;
+        float textH = glyphH * 7f;
+        DrawText(text, x + (width - textW) / 2f, y + (height - textH) / 2f, glyphW, glyphH);
+    }
+
+    void DrawText(string text, float x, float y, float glyphW, float glyphH)
+    {
+        float cx = x;
+        foreach (char c in text)
+        {
+            if (BitmapFont.Glyphs.TryGetValue(char.ToUpperInvariant(c), out var glyph))
+            {
+                for (int row = 0; row < 7; row++)
+                {
+                    byte bits = glyph[row];
+                    for (int col = 0; col < 5; col++)
+                    {
+                        if ((bits & (1 << (4 - col))) != 0)
+                            AddSprite(whiteRegion, cx + col * glyphW, y + row * glyphH, glyphW, glyphH);
+                    }
+                }
+            }
+            cx += glyphW * 5f;
+        }
     }
 
     void AddSprite(TextureRegion region, float x, float y, float width, float height)
