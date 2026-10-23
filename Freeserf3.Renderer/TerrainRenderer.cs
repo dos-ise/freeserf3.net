@@ -228,9 +228,11 @@ public sealed class TerrainRenderer : IDisposable
     static ShaderProgram CreateShader(GL gl)
     {
         string version = State.GetShaderVersionDirective();
+        // GLES fragment shaders need an explicit default float precision.
+        string precision = State.IsOpenGLES ? "precision mediump float;\n" : "";
 
-        string vertexSource = $@"
-{version}
+        // The #version directive must be the very first line (GLES is strict).
+        string vertexSource = $@"{version}
 in vec3 aPosition;
 in vec2 aUv;
 in float aColor;
@@ -256,9 +258,8 @@ void main()
 }}
 ";
 
-        string fragmentSource = $@"
-{version}
-in vec2 vUv;
+        string fragmentSource = $@"{version}
+{precision}in vec2 vUv;
 in float vColor;
 
 uniform sampler2D uTexture;

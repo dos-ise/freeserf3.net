@@ -18,7 +18,7 @@ param(
     [string]$AndroidSdkDir = "C:\Users\ostermann_d\android-sdk"
 )
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
+$repoRoot = $PSScriptRoot
 $csproj = Join-Path $repoRoot "Freeserf3.Android\Freeserf3.Android.csproj"
 
 if (-not (Test-Path (Join-Path $AndroidSdkDir "platforms\android-37.0\android.jar"))) {
@@ -26,7 +26,7 @@ if (-not (Test-Path (Join-Path $AndroidSdkDir "platforms\android-37.0\android.ja
 }
 
 Write-Host "Building freeserf3.net Android ($Configuration) with SDK: $AndroidSdkDir"
-dotnet build $csproj -c $Configuration "-p:AndroidSdkDirectory=$AndroidSdkDir" --nologo
+dotnet build $csproj -c $Configuration "-p:AndroidSdkDirectory=$AndroidSdkDir" -p:EmbedAssembliesIntoApk=true --nologo
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Build failed (exit code $LASTEXITCODE)."
