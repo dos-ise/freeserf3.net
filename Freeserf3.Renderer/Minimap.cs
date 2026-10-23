@@ -95,16 +95,13 @@ public sealed class Minimap : IDisposable
         };
     }
 
-    /// <summary>Draws the minimap in the top-right corner of the screen.</summary>
-    public void Draw(int screenWidth, int screenHeight)
+    /// <summary>Draws the minimap inside the given screen rectangle.</summary>
+    public void Draw(float x, float y, float width, float height, int screenWidth, int screenHeight)
     {
-        const float margin = 8f;
-        const float minimapSize = 160f;
-
-        float x0 = screenWidth - margin - minimapSize;
-        float y0 = margin;
-        float x1 = screenWidth - margin;
-        float y1 = margin + minimapSize;
+        float x0 = x;
+        float y0 = y;
+        float x1 = x + width;
+        float y1 = y + height;
 
         float[] vertices =
         {
