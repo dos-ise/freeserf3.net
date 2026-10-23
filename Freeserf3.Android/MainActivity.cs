@@ -282,7 +282,7 @@ public class MainActivity : SilkActivity
             gameObjects.Draw(viewMatrix * projection, zoom);
         }
 
-        minimap?.Draw(width, height);
+        minimap?.Draw(width - 8f - 160f, 8f, 160f, 160f, width, height);
         hud?.Draw(width, height, BuildHudLines());
 
         var error = gl.GetError();
