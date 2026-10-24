@@ -855,7 +855,7 @@ public sealed class Game
                 continue;
             if (Map.GetCell(position).ResourceType1 != type)
                 continue;
-            if (MapGeometry.GetDistance(building.Position, position) > radius)
+            if (MapGeometry.GetDistance(building.WorkAreaCenter, position) > radius)
                 continue;
             return true;
         }
@@ -879,7 +879,7 @@ public sealed class Game
                 continue;
             if (Map.GetCell(position).ResourceType1 != type)
                 continue;
-            if (MapGeometry.GetDistance(building.Position, position) > radius)
+            if (MapGeometry.GetDistance(building.WorkAreaCenter, position) > radius)
                 continue;
 
             MapResources[position] = amount - 1;
@@ -903,10 +903,10 @@ public sealed class Game
         {
             for (int dx = -radius; dx <= radius; dx++)
             {
-                var pos = new Position(building.Position.X + dx, building.Position.Y + dy);
+                var pos = new Position(building.WorkAreaCenter.X + dx, building.WorkAreaCenter.Y + dy);
                 if (!Map.IsInBounds(pos))
                     continue;
-                if (MapGeometry.GetDistance(building.Position, pos) > radius)
+                if (MapGeometry.GetDistance(building.WorkAreaCenter, pos) > radius)
                     continue;
                 if (predicate(pos))
                     return true;
@@ -1187,6 +1187,21 @@ public sealed class Game
         if (building == null)
             return;
         building.Priority = priority;
+    }
+
+    /// <summary>
+    /// Sets the center of a building's work area. The new center must be
+    /// within a reasonable distance of the building (like settlers-remake
+    /// WorkAreaBuilding.setWorkAreaCenter).
+    /// </summary>
+    public void SetWorkAreaCenter(Building building, Position center)
+    {
+        if (building == null)
+            return;
+        int maxDistance = building.Definition.WorkRadius * 3;
+        if (MapGeometry.GetDistance(building.Position, center) > maxDistance)
+            return;
+        building.WorkAreaCenter = center;
     }
 
     /// <summary>
@@ -2163,12 +2178,15 @@ public sealed class Game
     Position? FindResourceFor(Building building, Position workerPosition)
     {
         int radius = building.Definition.WorkRadius;
+        // Search from the worker (walkable) but only accept resources
+        // inside the building's work area around its center.
+        int maxDistance = radius + MapGeometry.GetDistance(workerPosition, building.WorkAreaCenter);
         if (building.Definition.Worker == WorkerType.Lumberjack)
-            return Pathfinder.FindNearest(Map, workerPosition, (m, p) => Trees.Contains(p), radius, IsWalkable);
+            return Pathfinder.FindNearest(Map, workerPosition, (m, p) => Trees.Contains(p) && MapGeometry.GetDistance(building.WorkAreaCenter, p) <= radius, maxDistance, IsWalkable);
         if (building.Definition.Worker == WorkerType.Stonecutter)
-            return Pathfinder.FindNearest(Map, workerPosition, (m, p) => Stones.Contains(p), radius, IsWalkable);
+            return Pathfinder.FindNearest(Map, workerPosition, (m, p) => Stones.Contains(p) && MapGeometry.GetDistance(building.WorkAreaCenter, p) <= radius, maxDistance, IsWalkable);
         if (building.Definition.Worker == WorkerType.Forester)
-            return Pathfinder.FindNearest(Map, workerPosition, (m, p) => IsPlantable(p) && p != workerPosition, radius, IsWalkable);
+            return Pathfinder.FindNearest(Map, workerPosition, (m, p) => IsPlantable(p) && p != workerPosition && MapGeometry.GetDistance(building.WorkAreaCenter, p) <= radius, maxDistance, IsWalkable);
         return null;
     }
 

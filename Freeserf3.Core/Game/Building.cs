@@ -56,6 +56,7 @@ public sealed class Building
         Type = type;
         Position = position;
         Player = player;
+        WorkAreaCenter = position;
         Health = Math.Max(50, Definition.TotalConstructionCost * 10);
     }
 
@@ -75,6 +76,13 @@ public sealed class Building
 
     /// <summary>The production priority of the building (default Low).</summary>
     public BuildingPriority Priority { get; set; } = BuildingPriority.Low;
+
+    /// <summary>
+    /// The center of the building's work area. Defaults to the building
+    /// position; the player can move it with the work radius button (like
+    /// settlers-remake WorkAreaBuilding).
+    /// </summary>
+    public Position WorkAreaCenter { get; set; }
 
     /// <summary>Construction progress in percent (0..100).</summary>
     public int ConstructionProgress { get; private set; }

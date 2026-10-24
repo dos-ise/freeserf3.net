@@ -32,7 +32,10 @@ public enum InteractionMode
     Road,
 
     /// <summary>Click places flags.</summary>
-    Flag
+    Flag,
+
+    /// <summary>Click sets the work area center of the selected building.</summary>
+    SetWorkArea
 }
 
 /// <summary>
@@ -64,6 +67,7 @@ public sealed class GameView : IDisposable
     BuildingType buildType = BuildingType.Lumberjack;
     Position? selected;
     Serf? selectedSoldier;
+    Building? workAreaBuilding;
     Vector2? mousePosition;
     int lastScreenWidth, lastScreenHeight;
 
@@ -242,6 +246,7 @@ public sealed class GameView : IDisposable
         controlPanel.SoldierRequested += OnSoldierRequested;
         controlPanel.StockAcceptRequested += OnStockAcceptRequested;
         controlPanel.PriorityRequested += OnPriorityRequested;
+        controlPanel.WorkAreaRequested += OnWorkAreaRequested;
         controlPanel.SystemButtonClicked += OnSystemButtonClicked;
         controlPanel.PauseRequested += OnPauseRequested;
         controlPanel.MusicRequested += OnMusicRequested;
@@ -448,6 +453,9 @@ public sealed class GameView : IDisposable
             case InteractionMode.Flag:
                 PlaceFlag(pos);
                 break;
+            case InteractionMode.SetWorkArea:
+                SetWorkAreaAt(pos);
+                break;
         }
     }
 
@@ -460,6 +468,7 @@ public sealed class GameView : IDisposable
         if (mode != InteractionMode.Select)
         {
             mode = InteractionMode.Select;
+            workAreaBuilding = null;
             controlPanel?.ClearSelection();
             log("Mode: select");
             return;
@@ -773,6 +782,16 @@ public sealed class GameView : IDisposable
                 else
                     gameObjects.AddBuilding(building.Type, building.Position, gameMap.GetCell(building.Position).Height);
             }
+
+            // Work area circle of the selected building with a work radius.
+            if (controlPanel?.SelectedMapBuilding is Building selectedBuilding
+                && selectedBuilding.Definition.WorkRadius > 0
+                && gameMap.IsInBounds(selectedBuilding.WorkAreaCenter))
+            {
+                gameObjects.AddWorkArea(selectedBuilding.WorkAreaCenter,
+                    gameMap.GetCell(selectedBuilding.WorkAreaCenter).Height,
+                    selectedBuilding.Definition.WorkRadius);
+            }
         }
 
         // Settlers walking around the map. The animation frame follows the
@@ -788,8 +807,7 @@ public sealed class GameView : IDisposable
                 var screenPos = GetMovableScreenPos(settler);
                 if (settler.Type == SerfType.Collector)
                     gameObjects.AddCarrier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.CarriedGood, settler.Facing, idle, screenPos);
-                else if (settler.Type == SerfType.Soldier)
-                {
+                else if (settler.Type == SerfType.Soldier)                {
                     bool attacking = settler.SoldierState == SoldierState.Attacking
                         && (settler.AttackTarget != null || settler.AttackBuilding != null);
                     if (attacking)
@@ -1227,6 +1245,30 @@ public sealed class GameView : IDisposable
             return;
         game.SetBuildingPriority(building, priority);
         log($"{building.Type} priority: {priority}");
+    }
+
+    /// <summary>
+    /// Handles the work radius button: enters the set-work-area mode so
+    /// the next click on the map moves the building's work area center.
+    /// </summary>
+    void OnWorkAreaRequested(Building building)
+    {
+        if (game == null)
+            return;
+        workAreaBuilding = building;
+        mode = InteractionMode.SetWorkArea;
+        log($"Set work area for {building.Type}: click on the map");
+    }
+
+    /// <summary>Sets the work area center of the selected building.</summary>
+    void SetWorkAreaAt(Position pos)
+    {
+        if (game == null || workAreaBuilding == null)
+            return;
+        game.SetWorkAreaCenter(workAreaBuilding, pos);
+        log($"Work area of {workAreaBuilding.Type} moved to {pos}");
+        workAreaBuilding = null;
+        mode = InteractionMode.Select;
     }
 
     /// <summary>Places the current building type at the given position.</summary>

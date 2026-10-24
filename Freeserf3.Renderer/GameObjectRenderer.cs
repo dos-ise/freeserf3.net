@@ -1047,6 +1047,25 @@ public sealed class GameObjectRenderer : IDisposable
         sprites.Add(image.Region, x, y, image.Width, image.Height, z);
     }
 
+    /// <summary>
+    /// Adds a work area circle around the given center: a ring of small
+    /// quads at the given radius, drawn slightly above the terrain.
+    /// </summary>
+    public void AddWorkArea(Position center, int height, int radius)
+    {
+        var (cx, cy) = MapGeometry.GridToScreen(center, height);
+        const int segments = 48;
+        const float cellSize = 16f;
+        float ringRadius = radius * cellSize;
+        for (int i = 0; i < segments; i++)
+        {
+            double angle = 2.0 * Math.PI * i / segments;
+            float x = cx + (float)(Math.Cos(angle) * ringRadius);
+            float y = cy + (float)(Math.Sin(angle) * ringRadius * 0.5f);
+            sprites.Add(new Sprite(whiteRegion, x - 2f, y - 2f, 4f, 4f, 0.95f, new Vector4(1f, 0.9f, 0.2f, 0.8f)));
+        }
+    }
+
     /// <summary>Draws all collected sprites.</summary>
     public void Draw(in Matrix4x4 viewProjection, float zoom)
     {

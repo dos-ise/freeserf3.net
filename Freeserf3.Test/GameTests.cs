@@ -2074,5 +2074,31 @@ public class GameTests : DataTestBase
             game.TickOnce();
         Assert.AreEqual(1, sawmill.Input.Get(Material.Trunk), "Sawmill should consume its input at High priority.");
     }
+
+    [TestMethod]
+    public void WorkAreaCenterCanBeMoved()
+    {
+        var map = new Map(128);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var stonecutter = new Building(BuildingType.Stonecutter, new Position(4, 4), 0);
+        stonecutter.MarkActive();
+        game.Buildings.Add(stonecutter);
+
+        Assert.AreEqual(new Position(4, 4), stonecutter.WorkAreaCenter, "Work area starts at the building.");
+
+        // Moving within the allowed distance works.
+        game.SetWorkAreaCenter(stonecutter, new Position(6, 6));
+        Assert.AreEqual(new Position(6, 6), stonecutter.WorkAreaCenter);
+
+        // Moving too far away is rejected (stonecutter work radius 20,
+        // max distance 60).
+        game.SetWorkAreaCenter(stonecutter, new Position(100, 100));
+        Assert.AreEqual(new Position(6, 6), stonecutter.WorkAreaCenter, "Too far away should be rejected.");
+    }
 }
 

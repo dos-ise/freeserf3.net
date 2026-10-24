@@ -253,6 +253,9 @@ public sealed class ControlPanel : IDisposable
     /// <summary>Raised when the priority button of a building is clicked.</summary>
     public event Action<Building, BuildingPriority>? PriorityRequested;
 
+    /// <summary>Raised when the work radius button of a building is clicked.</summary>
+    public event Action<Building>? WorkAreaRequested;
+
     /// <summary>Raised when the system (computer) button is clicked.</summary>
     public event Action? SystemButtonClicked;
 
@@ -645,6 +648,15 @@ public sealed class ControlPanel : IDisposable
                 };
                 PriorityRequested?.Invoke(building, next);
             });
+        }
+
+        // Work radius button below the priority button (buildings with a
+        // work area). Clicking enters the set-work-area mode.
+        if (building.Definition.WorkRadius > 0)
+        {
+            float workY = destroyY + closeSize + 4f + (building.Definition.IsProducer || building.Definition.IsMilitary ? closeSize + 4f : 0f);
+            AddSprite(workRadiusButton, destroyX, workY, closeSize, closeSize);
+            AddClickRegion(destroyX, workY, closeSize, closeSize, () => WorkAreaRequested?.Invoke(building));
         }
 
         // Building icon and name.
