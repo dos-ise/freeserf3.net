@@ -36,6 +36,7 @@ public class MainActivity : SilkActivity
     static IView? view;
     static GameView? gameView;
     static GL? gl;
+    static AndroidSoundPlayer? soundPlayer;
     static bool dragging;
     static Vector2 lastTouch;
     static Vector2 touchDown;
@@ -136,6 +137,8 @@ public class MainActivity : SilkActivity
 
             gameView = new GameView(gameData, s => Log.Debug(Tag, s));
             gameView.ExitRequested += () => activity.RunOnUiThread(activity.Finish);
+            soundPlayer = new AndroidSoundPlayer();
+            gameView.SetSoundPlayer(soundPlayer);
             if (!gameView.Load(null, view.FramebufferSize.X, view.FramebufferSize.Y))
             {
                 Log.Error(Tag, "Failed to load the game.");
@@ -177,6 +180,8 @@ public class MainActivity : SilkActivity
     {
         gameView?.Dispose();
         gameView = null;
+        soundPlayer?.Dispose();
+        soundPlayer = null;
     }
 
     public override bool DispatchTouchEvent(MotionEvent? e)

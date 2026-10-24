@@ -27,6 +27,7 @@ public sealed class MainWindow : IDisposable
     readonly IWindow window;
     IInputContext? input;
     GameView? gameView;
+    WindowsSoundPlayer? soundPlayer;
 
     // Camera drag state.
     bool dragging;
@@ -71,6 +72,8 @@ public sealed class MainWindow : IDisposable
 
         gameView = new GameView(gameData, Console.WriteLine);
         gameView.ExitRequested += () => window.Close();
+        soundPlayer = new WindowsSoundPlayer();
+        gameView.SetSoundPlayer(soundPlayer);
         if (!gameView.Load(Program.MapFile, window.Size.X, window.Size.Y))
         {
             throw new InvalidOperationException("Failed to load the game.");
@@ -180,6 +183,8 @@ public sealed class MainWindow : IDisposable
     {
         gameView?.Dispose();
         gameView = null;
+        soundPlayer?.Dispose();
+        soundPlayer = null;
     }
 
     public void Dispose()

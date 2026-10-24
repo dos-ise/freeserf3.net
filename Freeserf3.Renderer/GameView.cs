@@ -68,10 +68,41 @@ public sealed class GameView : IDisposable
     // the render loop, so the game cannot be started from a click handler).
     string? pendingMapFile;
 
+    // Sound: the host provides the platform player; the managers decode
+    // the game's sound file and play the music tracks.
+    ISoundPlayer? soundPlayer;
+    SoundManager? soundManager;
+    MusicManager? musicManager;
+
     public GameView(GameData gameData, Action<string>? log = null)
     {
         this.gameData = gameData;
         this.log = log ?? (_ => { });
+    }
+
+    /// <summary>
+    /// Sets the platform sound player and loads the sound effects and the
+    /// music tracks. Called by the host before the game starts.
+    /// </summary>
+    public void SetSoundPlayer(ISoundPlayer player)
+    {
+        soundPlayer = player;
+
+        var reader = gameData.LoadSound();
+        if (reader != null)
+        {
+            reader.Initialize();
+            soundManager = new SoundManager(reader, player);
+            log($"Sounds: {reader.SequenceCount} sequences loaded");
+        }
+        else
+        {
+            log("Sound file not found; sound effects disabled.");
+        }
+
+        musicManager = new MusicManager(player, gameData.ThemePath);
+        musicManager.Load();
+        log($"Music: {musicManager.TrackCount} tracks found");
     }
 
     /// <summary>The running game, or null if not loaded.</summary>
@@ -192,7 +223,7 @@ public sealed class GameView : IDisposable
         controlPanel.BuildingSelected += OnBuildingSelected;
         controlPanel.SystemButtonClicked += OnSystemButtonClicked;
         controlPanel.PauseRequested += OnPauseRequested;
-        controlPanel.MusicRequested += () => log("Music toggle not implemented yet.");
+        controlPanel.MusicRequested += OnMusicRequested;
         controlPanel.SaveRequested += () => log("Save not implemented yet.");
         controlPanel.ExitRequested += OnMenuExitRequested;
         controlPanel.CancelRequested += OnCancelRequested;
@@ -201,6 +232,7 @@ public sealed class GameView : IDisposable
 
         // Start a new round: players, starting resources and population.
         game = new Game(gameMap, 42);
+        game.PlaySound = id => soundManager?.PlaySound(id);
         game.StartGame();
         log($"Round started: {game.Players.Count} players, target population {game.TargetPopulation}");
         log($"Stacks: {game.Stacks.Count}, collectors: {game.Collectors.Count}");
@@ -209,6 +241,9 @@ public sealed class GameView : IDisposable
         controlPanel.Player = game.GetPlayer(0);
         controlPanel.Game = game;
         controlPanel.GameSpeed = GameSpeed;
+
+        // Start the music.
+        musicManager?.Start();
 
         // Demo: place the production chain (lumberjack, stonecutter,
         // sawmill) so the building and resource features are visible.
@@ -286,6 +321,9 @@ public sealed class GameView : IDisposable
                     minimap?.Update(game);
             }
         }
+
+        // Advance to the next music track when the current one finished.
+        musicManager?.Update();
 
         var viewProjection = CreateViewProjection(screenWidth, screenHeight);
         terrain.Draw(viewProjection, zoom);
@@ -393,7 +431,10 @@ public sealed class GameView : IDisposable
     /// </summary>
     public bool HandlePanelClick(Vector2 position)
     {
-        return controlPanel?.HandleClick(position) == true;
+        bool handled = controlPanel?.HandleClick(position) == true;
+        if (handled)
+            soundManager?.PlaySound(62); // UI click
+        return handled;
     }
 
     /// <summary>Sets the interaction mode.</summary>
@@ -443,7 +484,30 @@ public sealed class GameView : IDisposable
     {
         buildType = type;
         mode = InteractionMode.Build;
+        soundManager?.PlaySound(62); // UI click
         log($"Mode: build ({buildType})");
+    }
+
+    /// <summary>The Music button toggles the music.</summary>
+    void OnMusicRequested()
+    {
+        if (soundPlayer == null)
+        {
+            log("Music not available.");
+            return;
+        }
+
+        soundPlayer.MusicEnabled = !soundPlayer.MusicEnabled;
+        if (soundPlayer.MusicEnabled)
+        {
+            musicManager?.Start();
+            log("Music on");
+        }
+        else
+        {
+            musicManager?.Stop();
+            log("Music off");
+        }
     }
 
     /// <summary>
@@ -809,6 +873,7 @@ public sealed class GameView : IDisposable
         }
 
         var building = game.PlaceBuilding(buildType, pos, 0);
+        soundManager?.PlaySound(51); // building construction
         log($"Placed {building.Type} at {pos} ({building.State})");
     }
 

@@ -89,6 +89,12 @@ public sealed class Game
     /// <summary>Per-cell territory owner (index = y * Size + x), 0 = no owner.</summary>
     byte[] territory = Array.Empty<byte>();
 
+    /// <summary>
+    /// Raised when a sound effect should be played (sound id, see
+    /// SoundManager). Wired by the host to the sound player.
+    /// </summary>
+    public Action<int>? PlaySound { get; set; }
+
     /// <summary>Creates the players from the map's player info.</summary>
     public void CreatePlayers()
     {
@@ -585,12 +591,14 @@ public sealed class Game
     public void CutTree(Position position)
     {
         Trees.Remove(position);
+        PlaySound?.Invoke(36); // falling tree
     }
 
     /// <summary>Removes a stone from the map (it has been mined).</summary>
     public void MineStone(Position position)
     {
         Stones.Remove(position);
+        PlaySound?.Invoke(3); // stonecutter
     }
 
     /// <summary>Plants a new tree on the map (forester).</summary>
