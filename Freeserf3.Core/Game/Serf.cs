@@ -54,7 +54,10 @@ public enum BuilderState
     WalkingToSite,
 
     /// <summary>At the construction site, building.</summary>
-    Building
+    Building,
+
+    /// <summary>Walking away from the finished building.</summary>
+    WalkingAway
 }
 
 /// <summary>The states of a resource worker (lumberjack, stonecutter).</summary>

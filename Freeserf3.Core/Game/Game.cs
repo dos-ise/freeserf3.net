@@ -1315,12 +1315,13 @@ public sealed class Game
 
     /// <summary>
     /// Assigns a free settler as builder of the given construction site.
-    /// The builder appears at the site and starts building.
+    /// The builder appears at the site's flag and starts building.
     /// </summary>
     void AssignBuilder(Building building, Player player)
     {
         player.FreeSettlers--;
-        var builder = new Serf(player.Index, building.Position, SerfType.Builder)
+        var start = building.Flag?.Position ?? building.Position;
+        var builder = new Serf(player.Index, start, SerfType.Builder)
         {
             ConstructionSite = building,
             BuilderState = BuilderState.Building,
@@ -1333,7 +1334,8 @@ public sealed class Game
     /// <summary>
     /// Advances the builders: each builder consumes one construction
     /// material from its site every few ticks. A finished or destroyed site
-    /// releases the builder back to the free settlers.
+    /// makes the builder walk away before it is released back to the free
+    /// settlers.
     /// </summary>
     void TickBuilders()
     {
@@ -1344,6 +1346,28 @@ public sealed class Game
 
             if (site == null || site.State != BuildingState.ConstructionSite)
             {
+                // Walk away from the finished building before becoming a
+                // free settler (so no settler is left standing on it).
+                if (builder.BuilderState != BuilderState.WalkingAway)
+                {
+                    var away = FindWalkAwayPoint(builder.Position);
+                    if (away.HasValue)
+                    {
+                        var path = Pathfinder.FindPath(Map, builder.Position, away.Value, IsWalkable);
+                        if (path != null && path.Count > 0)
+                        {
+                            builder.SetPath(path);
+                            builder.BuilderState = BuilderState.WalkingAway;
+                            continue;
+                        }
+                    }
+                }
+                else
+                {
+                    builder.Tick();
+                    if (builder.State != MovableState.Idle)
+                        continue;
+                }
                 ReleaseBuilder(builder);
                 continue;
             }
@@ -1366,6 +1390,23 @@ public sealed class Game
                     break;
             }
         }
+    }
+
+    /// <summary>Finds a walkable point a few cells away from the given position.</summary>
+    Position? FindWalkAwayPoint(Position center)
+    {
+        for (int attempt = 0; attempt < 12; attempt++)
+        {
+            int dx = Random.Next(-4, 5);
+            int dy = Random.Next(-4, 5);
+            if (dx == 0 && dy == 0)
+                continue;
+
+            var pos = new Position(center.X + dx, center.Y + dy);
+            if (Map.IsInBounds(pos) && IsWalkable(Map, pos))
+                return pos;
+        }
+        return null;
     }
 
     /// <summary>Releases a builder: it becomes a free settler again.</summary>

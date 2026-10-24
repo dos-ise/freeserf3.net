@@ -101,6 +101,12 @@ public sealed class GameObjectRenderer : IDisposable
     /// <summary>Forester carrying a tree sequence in the settler file.</summary>
     public const int ForesterCarrySequence = 35;
 
+    /// <summary>Bricklayer (builder) walking sequence in the settler file.</summary>
+    public const int BricklayerWalkSequence = 21;
+
+    /// <summary>Bricklayer (builder) working sequence (ACTION1) in the settler file.</summary>
+    public const int BricklayerWorkSequence = 22;
+
     /// <summary>Walking sequence per resource worker profession.</summary>
     public static readonly Dictionary<WorkerType, int> WorkerWalkSequences = new()
     {
@@ -335,13 +341,15 @@ public sealed class GameObjectRenderer : IDisposable
         // movables.txt): stonecutter ACTION1 = 25, lumberjack ACTION1 = 30,
         // forester ACTION1 = 36. The walking and carrying sequences of the
         // resource workers are loaded too (stonecutter 24/26, lumberjack
-        // 29/31, forester 34/35).
+        // 29/31, forester 34/35), plus the bricklayer (builder) walking
+        // and working sequences (21/22).
         foreach (int sequence in new[]
         {
             StonecutterWorkSequence, LumberjackWorkSequence, ForesterWorkSequence,
             StonecutterWalkSequence, StonecutterCarrySequence,
             LumberjackWalkSequence, LumberjackCarrySequence,
-            ForesterWalkSequence, ForesterCarrySequence
+            ForesterWalkSequence, ForesterCarrySequence,
+            BricklayerWalkSequence, BricklayerWorkSequence
         })
         {
             var frames = settlers.GetSettlerSequence(sequence);
@@ -680,6 +688,19 @@ public sealed class GameObjectRenderer : IDisposable
     public void AddWorkerMovable(Position pos, int height, int playerColor, int frame, Direction direction, WorkerType profession)
     {
         int sequence = WorkerWalkSequences.TryGetValue(profession, out int s) ? s : 0;
+        if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
+            return;
+
+        AddSprite(frames[DirectionFrameIndex(direction, frame, frames.Length)], pos, height, 0.5f, visibleOnly: true);
+    }
+
+    /// <summary>
+    /// Adds a bricklayer (builder) sprite. Uses the working sequence (22)
+    /// while building and the walking sequence (21) otherwise.
+    /// </summary>
+    public void AddBuilderMovable(Position pos, int height, int playerColor, int frame, Direction direction, bool working)
+    {
+        int sequence = working ? BricklayerWorkSequence : BricklayerWalkSequence;
         if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
             return;
 

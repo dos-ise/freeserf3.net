@@ -659,6 +659,8 @@ public sealed class GameView : IDisposable
                     gameObjects.AddCarrier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.CarriedGood, settler.Facing);
                 else if (settler.Type == SerfType.Soldier)
                     gameObjects.AddSoldier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Weapon, settler.Facing);
+                else if (settler.Type == SerfType.Builder)
+                    gameObjects.AddBuilderMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, settler.BuilderState == BuilderState.Building);
                 else if (settler.Type == SerfType.ResourceWorker)
                 {
                     // The worker is inside the house between work cycles.
