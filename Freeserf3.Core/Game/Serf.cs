@@ -72,6 +72,9 @@ public enum ResourceWorkerState
     /// <summary>Walking back to the building after gathering.</summary>
     WalkingHome,
 
+    /// <summary>Inside the house after dropping the gathered good (not rendered).</summary>
+    InsideHome,
+
     /// <summary>Pausing before looking for the next resource.</summary>
     Pausing
 }

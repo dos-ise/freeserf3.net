@@ -659,8 +659,18 @@ public sealed class GameView : IDisposable
                     gameObjects.AddCarrier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.CarriedGood, settler.Facing);
                 else if (settler.Type == SerfType.Soldier)
                     gameObjects.AddSoldier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Weapon, settler.Facing);
-                else if (settler.Type == SerfType.ResourceWorker && settler.ResourceState == ResourceWorkerState.Working)
-                    gameObjects.AddWorkingMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, settler.Profession);
+                else if (settler.Type == SerfType.ResourceWorker)
+                {
+                    // The worker is inside the house between work cycles.
+                    if (settler.ResourceState == ResourceWorkerState.InsideHome)
+                        continue;
+                    if (settler.ResourceState == ResourceWorkerState.Working)
+                        gameObjects.AddWorkingMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, settler.Profession);
+                    else if (settler.IsCarrying)
+                        gameObjects.AddCarryingMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Profession);
+                    else
+                        gameObjects.AddWorkerMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, settler.Profession);
+                }
                 else
                     gameObjects.AddMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing);
             }

@@ -370,7 +370,15 @@ public class GameTests : DataTestBase
             game.TickOnce();
 
         Assert.IsFalse(game.Trees.Contains(treePos), "Tree should have been cut down");
-        Assert.IsTrue(building.Output.Get(Material.Trunk) > 0, "Lumberjack should have produced a trunk");
+
+        // The trunk is carried to the flag in front of the house and then
+        // to the player's stock.
+        int trunksBefore = game.GetPlayer(0)!.Inventory.Get(Material.Trunk);
+        for (int i = 0; i < 2000 && building.Flag!.Count == 0 && game.GetPlayer(0)!.Inventory.Get(Material.Trunk) == trunksBefore; i++)
+            game.TickOnce();
+
+        Assert.IsTrue(building.Flag!.Count > 0 || game.GetPlayer(0)!.Inventory.Get(Material.Trunk) > trunksBefore,
+            "Lumberjack should have produced a trunk");
     }
 
     [TestMethod]
@@ -396,7 +404,57 @@ public class GameTests : DataTestBase
             game.TickOnce();
 
         Assert.IsFalse(game.Stones.Contains(stonePos), "Stone should have been mined");
-        Assert.IsTrue(building.Output.Get(Material.Stone) > 0, "Stonecutter should have produced stone");
+
+        // The stone is carried to the flag in front of the house and then
+        // to the player's stock.
+        int stonesBefore = game.GetPlayer(0)!.Inventory.Get(Material.Stone);
+        for (int i = 0; i < 2000 && building.Flag!.Count == 0 && game.GetPlayer(0)!.Inventory.Get(Material.Stone) == stonesBefore; i++)
+            game.TickOnce();
+
+        Assert.IsTrue(building.Flag!.Count > 0 || game.GetPlayer(0)!.Inventory.Get(Material.Stone) > stonesBefore,
+            "Stonecutter should have produced stone");
+    }
+
+    [TestMethod]
+    public void StonecutterCarriesStoneToFlagAndEntersHome()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Add a stone near the building.
+        var stonePos = new Position(6, 6);
+        game.Stones.Add(stonePos);
+
+        var building = game.PlaceBuilding(BuildingType.Stonecutter, new Position(4, 4), 0);
+        // Wait for the building to become active and a worker assigned.
+        for (int i = 0; i < 3000 && game.ResourceWorkers.Count == 0; i++)
+            game.TickOnce();
+        Assert.AreEqual(1, game.ResourceWorkers.Count);
+        var worker = game.ResourceWorkers[0];
+
+        // The worker carries the stone to the flag, drops it there and
+        // goes inside the house.
+        bool sawCarry = false, sawDrop = false, sawInside = false;
+        for (int i = 0; i < 3000; i++)
+        {
+            game.TickOnce();
+            if (worker.CarriedGood == Material.Stone)
+                sawCarry = true;
+            if (building.Flag != null && building.Flag.Count > 0)
+                sawDrop = true;
+            if (worker.ResourceState == ResourceWorkerState.InsideHome)
+                sawInside = true;
+        }
+
+        Assert.IsFalse(game.Stones.Contains(stonePos), "Stone should have been mined");
+        Assert.IsTrue(sawCarry, "Stonecutter should carry the stone");
+        Assert.IsTrue(sawDrop, "Stonecutter should drop the stone at the flag");
+        Assert.IsTrue(sawInside, "Stonecutter should go inside the house");
     }
 
     [TestMethod]

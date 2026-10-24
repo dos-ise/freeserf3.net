@@ -1380,7 +1380,7 @@ public sealed class Game
     }
 
     /// <summary>Ticks between two work actions of a resource worker.</summary>
-    const int ResourceWorkTicks = 30;
+    const int ResourceWorkTicks = 120;
 
     /// <summary>
     /// Assigns a free settler as resource worker of the given production
@@ -1490,19 +1490,22 @@ public sealed class Game
                     if (worker.WorkTicks < ResourceWorkTicks)
                         break;
 
-                    // Cut the tree, mine the stone or plant a new tree.
+                    // Cut the tree, mine the stone or plant a new tree. The
+                    // lumberjack and stonecutter carry the gathered good to
+                    // the flag in front of the house (like the original);
+                    // the forester just plants a tree.
                     var target = worker.ResourceTarget;
                     if (target.HasValue)
                     {
                         if (building.Definition.Worker == WorkerType.Lumberjack)
                         {
                             CutTree(target.Value);
-                            building.ProduceResource();
+                            worker.PickUp(Material.Trunk);
                         }
                         else if (building.Definition.Worker == WorkerType.Stonecutter)
                         {
                             MineStone(target.Value);
-                            building.ProduceResource();
+                            worker.PickUp(Material.Stone);
                         }
                         else if (building.Definition.Worker == WorkerType.Forester)
                         {
@@ -1527,8 +1530,30 @@ public sealed class Game
                     if (worker.State != MovableState.Idle)
                         break;
 
-                    worker.ResourceTarget = null;
-                    worker.ResourceState = ResourceWorkerState.LookingForResource;
+                    // Drop the carried good at the flag in front of the
+                    // house, then go inside the house (the worker is not
+                    // rendered while inside).
+                    if (worker.IsCarrying && building.Flag != null)
+                    {
+                        var carried = worker.Drop();
+                        if (carried.HasValue)
+                            building.Flag.AddGood(carried.Value);
+                    }
+                    worker.IdleTicks = 0;
+                    worker.ResourceState = ResourceWorkerState.InsideHome;
+                    break;
+
+                case ResourceWorkerState.InsideHome:
+                    // Pause inside the house before looking for the next
+                    // resource (like the original, where the worker goes
+                    // inside the building between work cycles).
+                    worker.IdleTicks++;
+                    if (worker.IdleTicks >= 60)
+                    {
+                        worker.IdleTicks = 0;
+                        worker.ResourceTarget = null;
+                        worker.ResourceState = ResourceWorkerState.LookingForResource;
+                    }
                     break;
 
                 case ResourceWorkerState.Pausing:
