@@ -372,6 +372,7 @@ public sealed class GameView : IDisposable
         // Minimap on top of the control panel, then the panel itself.
         var (mx, my, mw, mh) = controlPanel.GetMiniMapRect(screenWidth, screenHeight);
         minimap?.Draw(mx, my, mw, mh, screenWidth, screenHeight);
+        controlPanel.MousePosition = mousePosition;
         controlPanel.Draw(screenWidth, screenHeight);
     }
 

@@ -190,6 +190,12 @@ public sealed class ControlPanel : IDisposable
     bool systemMenuVisible;
     bool isPaused;
 
+    /// <summary>The mouse position in screen pixels (for tooltips).</summary>
+    public Vector2? MousePosition { get; set; }
+
+    /// <summary>The building the mouse currently hovers over, if any.</summary>
+    public BuildingType? HoveredBuilding { get; private set; }
+
     /// <summary>The player whose data the panel shows (inventory, population).</summary>
     public Player? Player { get; set; }
 
@@ -460,6 +466,7 @@ public sealed class ControlPanel : IDisposable
         var buildings = CurrentBuildings();
         float cellWidth = ContentWidth / ContentColumns;
         float cellHeight = ContentHeight / ContentRows;
+        HoveredBuilding = null;
         for (int i = 0; i < buildings.Length; i++)
         {
             var (type, _) = buildings[i];
@@ -474,8 +481,54 @@ public sealed class ControlPanel : IDisposable
             if (type == selectedBuilding)
                 AddCentered(activeMark, x, y, cellWidth, cellHeight);
 
+            // Tooltip: remember the building under the mouse.
+            if (MousePosition is Vector2 mouse
+                && mouse.X >= x * scale && mouse.X <= (x + cellWidth) * scale
+                && mouse.Y >= y * scale && mouse.Y <= (y + cellHeight) * scale)
+            {
+                HoveredBuilding = type;
+            }
+
             AddClickRegion(x, y, cellWidth, cellHeight, () => SelectBuilding(type));
         }
+
+        // Draw the tooltip last so it is on top of the buttons.
+        if (HoveredBuilding is BuildingType hovered)
+            DrawTooltip(hovered);
+    }
+
+    /// <summary>Draws the tooltip for the given building next to the mouse.</summary>
+    void DrawTooltip(BuildingType type)
+    {
+        if (MousePosition is not Vector2 mouse)
+            return;
+
+        string name = type.ToString().ToUpperInvariant();
+        const float glyphW = 2f, glyphH = 3f;
+        float textW = name.Length * glyphW * 5f;
+        float textH = glyphH * 7f;
+        float pad = 4f;
+        float boxW = textW + pad * 2f;
+        float boxH = textH + pad * 2f;
+
+        // Place the tooltip to the right of the mouse, flipped left if it
+        // would leave the panel.
+        float x = mouse.X / scale + 10f;
+        float y = mouse.Y / scale - boxH / 2f;
+        if (x + boxW > PanelWidth)
+            x = mouse.X / scale - boxW - 10f;
+        y = Math.Clamp(y, MiniMapHeight, MiniMapHeight + PanelHeight - boxH);
+
+        // Dark background box with a light border.
+        var dark = new Vector4(0.1f, 0.1f, 0.1f, 0.9f);
+        var light = new Vector4(0.8f, 0.8f, 0.8f, 1f);
+        AddSprite(whiteRegion, x, y, boxW, boxH, dark);
+        AddSprite(whiteRegion, x, y, boxW, 1f, light);
+        AddSprite(whiteRegion, x, y + boxH - 1f, boxW, 1f, light);
+        AddSprite(whiteRegion, x, y, 1f, boxH, light);
+        AddSprite(whiteRegion, x + boxW - 1f, y, 1f, boxH, light);
+
+        DrawText(name, x + pad, y + pad, glyphW, glyphH);
     }
 
     /// <summary>Draws the goods tab content (stock, tools, spread, transport).</summary>
@@ -871,6 +924,11 @@ public sealed class ControlPanel : IDisposable
     void AddSprite(TextureRegion region, float x, float y, float width, float height)
     {
         sprites.Add(new Sprite(region, x * scale, y * scale, width * scale, height * scale));
+    }
+
+    void AddSprite(TextureRegion region, float x, float y, float width, float height, Vector4 color)
+    {
+        sprites.Add(new Sprite(region, x * scale, y * scale, width * scale, height * scale, 0f, color));
     }
 
     void AddCentered(TextureRegion region, float x, float y, float cellWidth, float cellHeight)
