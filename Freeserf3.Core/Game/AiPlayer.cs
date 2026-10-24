@@ -54,6 +54,45 @@ public sealed class AiPlayer
 
         if (game.Tick % AttackInterval == 0)
             TryAttack();
+
+        if (game.Tick % DefendInterval == 0)
+            TryDefend();
+    }
+
+    /// <summary>Ticks between two AI defense checks.</summary>
+    const int DefendInterval = 200;
+
+    /// <summary>
+    /// Sends nearby soldiers to defend buildings that are under attack
+    /// (health below half).
+    /// </summary>
+    void TryDefend()
+    {
+        foreach (var building in game.Buildings)
+        {
+            if (building.Player != player.Index || building.State != BuildingState.Active)
+                continue;
+            if (building.Health >= building.Definition.TotalConstructionCost * 10 * 0.5f)
+                continue;
+
+            // Order idle soldiers within reach to march to the building.
+            int sent = 0;
+            foreach (var soldier in game.Settlers)
+            {
+                if (soldier.Player != player.Index || soldier.Type != SerfType.Soldier)
+                    continue;
+                if (soldier.MarchTarget != null || soldier.SoldierState == SoldierState.Attacking)
+                    continue;
+                if (MapGeometry.GetDistance(soldier.Position, building.Position) > 20)
+                    continue;
+
+                soldier.MarchTarget = building.Flag?.Position ?? building.Position;
+                soldier.SoldierState = SoldierState.Attacking;
+                sent++;
+                if (sent >= 2)
+                    break;
+            }
+        }
     }
 
     /// <summary>
