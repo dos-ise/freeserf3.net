@@ -149,6 +149,13 @@ public sealed class Serf : Movable
     /// <summary>The military building the soldier is stationed in.</summary>
     public Building? Barracks { get; set; }
 
+    /// <summary>
+    /// Whether the soldier has been sent on an attack wave and left its
+    /// building. Deployed soldiers keep fighting even if their barracks
+    /// is destroyed.
+    /// </summary>
+    public bool IsDeployed { get; set; }
+
     /// <summary>The weapon the soldier carries (sword, spear or bow).</summary>
     public Material Weapon { get; set; } = Material.Sword;
 

@@ -1763,6 +1763,8 @@ public class GameTests : DataTestBase
         Assert.IsTrue(marching, "The AI did not send an attack wave.");
         Assert.IsTrue(MapGeometry.GetDistance(soldier.MarchTarget!.Value, humanHouse.Position) <= 2,
             "The attack target is not near the human building.");
+        Assert.IsTrue(soldier.IsDeployed, "The sent soldier should be deployed.");
+        Assert.IsFalse(aiTower.Soldiers.Contains(soldier), "The sent soldier should leave the building.");
     }
 
     [TestMethod]

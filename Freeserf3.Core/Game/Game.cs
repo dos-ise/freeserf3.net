@@ -1192,6 +1192,8 @@ public sealed class Game
         {
             if (soldier.Type != SerfType.Soldier)
                 continue;
+            if (soldier.IsDeployed)
+                continue;
             if (soldier.Barracks == null || soldier.Barracks.State != BuildingState.Active)
                 continue;
 
@@ -1325,7 +1327,9 @@ public sealed class Game
 
         foreach (var soldier in soldiers)
         {
-            if (soldier.Barracks == null || soldier.Barracks.State != BuildingState.Active)
+            // Deployed soldiers (attack waves) keep fighting even without
+            // an active barracks.
+            if (!soldier.IsDeployed && (soldier.Barracks == null || soldier.Barracks.State != BuildingState.Active))
                 continue;
 
             // Drop a target that died, belongs to the same player or fled.

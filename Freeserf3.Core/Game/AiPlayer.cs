@@ -191,11 +191,15 @@ public sealed class AiPlayer
             if (building.State != BuildingState.Active)
                 continue;
 
-            foreach (var soldier in building.Soldiers)
+            foreach (var soldier in building.Soldiers.ToList())
             {
                 if (soldier.MarchTarget != null || soldier.SoldierState == SoldierState.Attacking)
                     continue;
 
+                // The soldier leaves the building for the attack wave, so
+                // the building can recruit a replacement.
+                building.Soldiers.Remove(soldier);
+                soldier.IsDeployed = true;
                 soldier.MarchTarget = attackPos;
                 soldier.SoldierState = SoldierState.Attacking;
                 sent++;
