@@ -255,6 +255,31 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void PlaceBuildingTurnsGroundToSand()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 8, PosY = 8 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Before placing, the ground is grass (16).
+        Assert.AreEqual(16, map.GetCell(4, 4).Landscape);
+
+        game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+
+        // The 3x3 footprint under the building becomes sand (48).
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+                Assert.AreEqual(48, map.GetCell(4 + dx, 4 + dy).Landscape, $"cell ({4 + dx},{4 + dy})");
+        }
+        // Cells outside the footprint stay grass.
+        Assert.AreEqual(16, map.GetCell(6, 4).Landscape);
+    }
+
+    [TestMethod]
     public void ConstructionWaitsForFreeSettler()
     {
         var map = new Map(8);

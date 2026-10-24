@@ -254,6 +254,7 @@ public sealed class Game
     {
         var building = new Building(type, position, playerIndex);
         Buildings.Add(building);
+        SetBuildingGround(position);
 
         if (playerIndex >= 0 && playerIndex < Networks.Count)
         {
@@ -400,6 +401,7 @@ public sealed class Game
             var building = new Building(type.Value, new Position(mapBuilding.PosX, mapBuilding.PosY), mapBuilding.Party);
             building.MarkActive();
             Buildings.Add(building);
+            SetBuildingGround(building.Position);
 
             if (mapBuilding.Party >= 0 && mapBuilding.Party < Networks.Count)
             {
@@ -627,10 +629,34 @@ public sealed class Game
         return false;
     }
 
-    /// <summary>Whether the cell lies within a building's 3x3 footprint.</summary>
+    /// <summary>
+    /// Whether the cell lies within a building's 3x3 footprint.
+    /// </summary>
     static bool BuildingFootprintContains(Position building, Position pos)
     {
         return Math.Abs(pos.X - building.X) <= 1 && Math.Abs(pos.Y - building.Y) <= 1;
+    }
+
+    /// <summary>
+    /// Replaces the ground under the building's 3x3 footprint with sand
+    /// (like the original game, where buildings stand on a sand
+    /// foundation). The sand stays after the building is demolished.
+    /// </summary>
+    public void SetBuildingGround(Position building)
+    {
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                var pos = new Position(building.X + dx, building.Y + dy);
+                if (!Map.IsInBounds(pos))
+                    continue;
+
+                var cell = Map.GetCell(pos);
+                cell.Landscape = 48; // Sand
+                Map.SetCell(pos, cell);
+            }
+        }
     }
 
     /// <summary>All carriers of all players (for rendering).</summary>

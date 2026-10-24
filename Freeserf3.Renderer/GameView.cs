@@ -247,6 +247,10 @@ public sealed class GameView : IDisposable
         game = new Game(gameMap, 42);
         game.PlaySound = id => soundManager?.PlaySound(id);
         game.StartGame();
+        // The map buildings stand on sand; rebuild the terrain so the
+        // ground under them is sand instead of grass.
+        terrain.Rebuild(gameMap);
+        terrain.UpdateFog(fogOfWar);
         log($"Round started: {game.Players.Count} players, target population {game.TargetPopulation}");
         log($"Stacks: {game.Stacks.Count}, collectors: {game.Collectors.Count}");
 
@@ -946,6 +950,10 @@ public sealed class GameView : IDisposable
         }
 
         var building = game.PlaceBuilding(buildType, pos, 0);
+        // The new building stands on sand; rebuild the terrain so the
+        // ground under it is sand instead of grass.
+        terrain.Rebuild(gameMap);
+        terrain.UpdateFog(fogOfWar);
         soundManager?.PlaySound(51); // building construction
         log($"Placed {building.Type} at {pos} ({building.State})");
     }

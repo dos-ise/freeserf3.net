@@ -84,9 +84,26 @@ public sealed class TerrainRenderer : IDisposable
     public void Build(MapFileReader map, DatFileReader gfx)
     {
         var area = map.Area ?? throw new InvalidOperationException("Map area not loaded.");
-        size = map.WidthHeight;
+        LoadLandscapeImages(gfx);
+        BuildGeometry(map.WidthHeight,
+            (x, y) => area[y * map.WidthHeight + x].Landscape,
+            (x, y) => area[y * map.WidthHeight + x].Height);
+    }
 
-        // Load all landscape images into the atlas.
+    /// <summary>
+    /// Rebuilds the terrain geometry from the game map (used after the
+    /// ground under a building was changed to sand). The landscape images
+    /// stay in the atlas.
+    /// </summary>
+    public void Rebuild(Map map)
+    {
+        BuildGeometry(map.Size,
+            (x, y) => map.GetCell(x, y).Landscape,
+            (x, y) => map.GetCell(x, y).Height);
+    }
+
+    void LoadLandscapeImages(DatFileReader gfx)
+    {
         for (int i = 0; i < gfx.LandscapeCount; i++)
         {
             var image = gfx.GetLandscape(i);
@@ -94,6 +111,11 @@ public sealed class TerrainRenderer : IDisposable
                 continue;
             textureRegions[i] = atlas.AddImage(image.Rgba, image.Width, image.Height);
         }
+    }
+
+    void BuildGeometry(int size, Func<int, int, byte> getLandscape, Func<int, int, byte> getHeight)
+    {
+        this.size = size;
 
         // Build the vertex data: 2 triangles per cell, 3 vertices each.
         var vertices = new List<float>(size * size * 2 * 3 * 6);
@@ -103,7 +125,7 @@ public sealed class TerrainRenderer : IDisposable
         {
             for (int x = 0; x < size; x++)
             {
-                AddCell(vertices, indices, map, x, y);
+                AddCell(vertices, indices, size, getLandscape, getHeight, x, y);
             }
         }
 
@@ -122,23 +144,21 @@ public sealed class TerrainRenderer : IDisposable
         gl.BindVertexArray(0);
     }
 
-    void AddCell(List<float> vertices, List<uint> indices, MapFileReader map, int x, int y)
+    void AddCell(List<float> vertices, List<uint> indices, int size,
+        Func<int, int, byte> getLandscape, Func<int, int, byte> getHeight, int x, int y)
     {
-        int size = map.WidthHeight;
-        var area = map.Area!;
-
         LandscapeType? GetType(int gx, int gy)
         {
             if (gx < 0 || gx >= size || gy < 0 || gy >= size)
                 return null;
-            return LandscapeMapping.FromMapValue(area[gy * size + gx].Landscape);
+            return LandscapeMapping.FromMapValue(getLandscape(gx, gy));
         }
 
-        byte GetHeight(int gx, int gy)
+        byte GetHeightAt(int gx, int gy)
         {
             if (gx < 0 || gx >= size || gy < 0 || gy >= size)
                 return 0;
-            return area[gy * size + gx].Height;
+            return getHeight(gx, gy);
         }
 
         // Up triangle: (x, y), (x, y+1), (x+1, y+1)
@@ -149,9 +169,9 @@ public sealed class TerrainRenderer : IDisposable
         var rightUp = GetType(x + 1, y + 1) ?? LandscapeType.Grass;
         int texUp = LandscapeMapping.GetTextureIndex(leftUp, centerUp, rightUp, (x * 37 + y * 17) & 1);
         AddTriangle(vertices, indices,
-            (x, y, GetHeight(x, y)),
-            (x, y + 1, GetHeight(x, y + 1)),
-            (x + 1, y + 1, GetHeight(x + 1, y + 1)),
+            (x, y, GetHeightAt(x, y)),
+            (x, y + 1, GetHeightAt(x, y + 1)),
+            (x + 1, y + 1, GetHeightAt(x + 1, y + 1)),
             texUp, true, leftUp == rightUp, leftUp == centerUp, y * size + x);
 
         // Down triangle: (x, y), (x+1, y+1), (x+1, y)
@@ -160,9 +180,9 @@ public sealed class TerrainRenderer : IDisposable
         var rightDown = GetType(x + 1, y) ?? LandscapeType.Grass;
         int texDown = LandscapeMapping.GetTextureIndex(leftDown, centerDown, rightDown, x & 1);
         AddTriangle(vertices, indices,
-            (x, y, GetHeight(x, y)),
-            (x + 1, y + 1, GetHeight(x + 1, y + 1)),
-            (x + 1, y, GetHeight(x + 1, y)),
+            (x, y, GetHeightAt(x, y)),
+            (x + 1, y + 1, GetHeightAt(x + 1, y + 1)),
+            (x + 1, y, GetHeightAt(x + 1, y)),
             texDown, false, leftDown == rightDown, leftDown == centerDown, y * size + x);
     }
 
