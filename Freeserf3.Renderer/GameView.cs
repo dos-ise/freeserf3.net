@@ -306,10 +306,9 @@ public sealed class GameView : IDisposable
         var (cx, cy) = MapGeometry.GridToScreen(target, 0f);
         cameraOffset = new Vector2(-cx, -cy);
 
-        // Fit the whole map into the window.
-        float mapWidth = (size - 1) * 24f;
-        float mapHeight = (size - 1) * 9f;
-        zoom = MathF.Min(screenWidth / mapWidth, screenHeight / mapHeight);
+        // Start at a comfortable zoom level instead of fitting the whole
+        // map into the window (which is far too zoomed out on large maps).
+        zoom = 1.0f;
     }
 
     /// <summary>
@@ -410,7 +409,7 @@ public sealed class GameView : IDisposable
     /// <summary>Zooms the camera by the given factor (clamped).</summary>
     public void Zoom(float factor)
     {
-        zoom = Math.Clamp(zoom * factor, 0.1f, 10.0f);
+        zoom = Math.Clamp(zoom * factor, 0.1f, 4.0f);
     }
 
     /// <summary>Updates the pointer position (used for the building preview).</summary>
