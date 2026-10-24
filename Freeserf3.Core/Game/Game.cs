@@ -752,6 +752,36 @@ public sealed class Game
     }
 
     /// <summary>
+    /// Finds the nearest reachable stack within the given distance using a
+    /// breadth-first search over walkable cells. Unlike
+    /// <see cref="FindNearestStack"/> this skips stacks that cannot be
+    /// reached, so the collectors do not run the expensive A* pathfinder
+    /// against unreachable stacks every tick.
+    /// </summary>
+    ResourceStack? FindNearestReachableStack(Position position, int maxDistance = 30)
+    {
+        var stackPositions = new HashSet<Position>();
+        foreach (var stack in Stacks)
+        {
+            if (!stack.IsEmpty)
+                stackPositions.Add(stack.Position);
+        }
+        if (stackPositions.Count == 0)
+            return null;
+
+        var found = Pathfinder.FindNearest(Map, position, (m, p) => stackPositions.Contains(p), maxDistance, IsWalkable);
+        if (found == null)
+            return null;
+
+        foreach (var stack in Stacks)
+        {
+            if (!stack.IsEmpty && stack.Position == found.Value)
+                return stack;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Whether a map-file object byte is a tree. Tree objects are 68-80
     /// (birch, elm, oak, ...) and 84 (small tree), see the original map
     /// object types.
@@ -1391,6 +1421,32 @@ public sealed class Game
     }
 
     /// <summary>
+    /// Sets the settler's path to the target, but only recomputes the path
+    /// when the retry cooldown has expired. Returns true when a path was
+    /// set. This prevents stuck settlers (e.g. AI attack waves that cannot
+    /// reach their target) from running the pathfinder every tick.
+    /// </summary>
+    bool TrySetPath(Serf settler, Position target)
+    {
+        if (settler.PathRetryTicks > 0)
+        {
+            settler.PathRetryTicks--;
+            return false;
+        }
+
+        var path = Pathfinder.FindPath(Map, settler.Position, target, IsWalkable);
+        if (path != null && path.Count > 0)
+        {
+            settler.SetPath(path);
+            settler.PathRetryTicks = 0;
+            return true;
+        }
+
+        settler.PathRetryTicks = 30;
+        return false;
+    }
+
+    /// <summary>
     /// Advances the soldier combat: each soldier searches for enemies in
     /// its search radius, moves toward them and attacks when in range.
     /// A soldier whose health reaches zero is removed from the game.
@@ -1441,9 +1497,7 @@ public sealed class Game
                     }
                     else if (soldier.State != MovableState.Walking)
                     {
-                        var path = Pathfinder.FindPath(Map, soldier.Position, retreatHome, IsWalkable);
-                        if (path != null && path.Count > 0)
-                            soldier.SetPath(path);
+                        TrySetPath(soldier, retreatHome);
                         soldier.Tick();
                     }
                     continue;
@@ -1477,9 +1531,7 @@ public sealed class Game
                     var goal = garrison.Flag?.Position ?? garrison.Position;
                     if (soldier.State != MovableState.Walking)
                     {
-                        var path = Pathfinder.FindPath(Map, soldier.Position, goal, IsWalkable);
-                        if (path != null && path.Count > 0)
-                            soldier.SetPath(path);
+                        TrySetPath(soldier, goal);
                     }
                     soldier.Tick();
                     continue;
@@ -1527,9 +1579,7 @@ public sealed class Game
                     }
                     else if (soldier.State != MovableState.Walking)
                     {
-                        var path = Pathfinder.FindPath(Map, soldier.Position, marchTarget, IsWalkable);
-                        if (path != null && path.Count > 0)
-                            soldier.SetPath(path);
+                        TrySetPath(soldier, marchTarget);
                     }
                     soldier.Tick();
                     continue;
@@ -1574,9 +1624,7 @@ public sealed class Game
                     var goal = buildingTarget.Flag?.Position ?? buildingTarget.Position;
                     if (soldier.State != MovableState.Walking)
                     {
-                        var path = Pathfinder.FindPath(Map, soldier.Position, goal, IsWalkable);
-                        if (path != null && path.Count > 0)
-                            soldier.SetPath(path);
+                        TrySetPath(soldier, goal);
                     }
                     soldier.Tick();
                 }
@@ -1621,9 +1669,7 @@ public sealed class Game
                 // smooth.
                 if (soldier.State != MovableState.Walking)
                 {
-                    var path = Pathfinder.FindPath(Map, soldier.Position, enemy.Position, IsWalkable);
-                    if (path != null && path.Count > 0)
-                        soldier.SetPath(path);
+                    TrySetPath(soldier, enemy.Position);
                 }
                 soldier.Tick();
             }
@@ -1752,7 +1798,7 @@ public sealed class Game
             switch (collector.CollectorState)
             {
                 case CollectorState.LookingForStack:
-                    var stack = FindNearestStack(collector.Position);
+                    var stack = FindNearestReachableStack(collector.Position);
                     if (stack == null)
                     {
                         collector.CollectorState = CollectorState.Pausing;

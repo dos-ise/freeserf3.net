@@ -200,6 +200,12 @@ public sealed class Serf : Movable
     /// <summary>Ticks spent recovering at the barracks after a retreat.</summary>
     public int RetreatTicks { get; set; }
 
+    /// <summary>
+    /// Ticks until the next path recomputation. Set when a path search
+    /// fails so stuck settlers do not run the pathfinder every tick.
+    /// </summary>
+    public int PathRetryTicks { get; set; }
+
     /// <summary>The soldier's remaining health.</summary>
     public float Health { get; set; } = 100f;
 
