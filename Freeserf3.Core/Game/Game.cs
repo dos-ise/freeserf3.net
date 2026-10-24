@@ -75,6 +75,9 @@ public sealed class Game
     /// <summary>The transport network of each player (index = player index).</summary>
     public List<TransportNetwork> Networks { get; } = new();
 
+    /// <summary>The computer opponents (one per AI player).</summary>
+    readonly List<AiPlayer> aiPlayers = new();
+
     /// <summary>Population needed to win the round.</summary>
     public int TargetPopulation { get; set; } = 20;
 
@@ -156,19 +159,15 @@ public sealed class Game
         Networks.Clear();
         IsWon = false;
 
-        // Create walking settlers from the map's settlers. In a
-        // single-player round only the human player's settlers are part of
-        // the game (no AI opponents). Settlers that the map places in
-        // water are skipped (they would stand in the sea).
+        // Create walking settlers from the map's settlers. Settlers that
+        // the map places in water are skipped (they would stand in the
+        // sea).
         Settlers.Clear();
         Collectors.Clear();
         Builders.Clear();
         ResourceWorkers.Clear();
         foreach (var mapSettler in Map.Settlers)
         {
-            if (mapSettler.Party != 0)
-                continue;
-
             var position = new Position(mapSettler.PosX, mapSettler.PosY);
             if (!IsWalkable(Map, position))
                 continue;
@@ -250,9 +249,16 @@ public sealed class Game
 
         // The buildings placed on the map become real buildings: they are
         // active, connected to the transport network and staffed with the
-        // soldiers the map file lists. In a single-player round only the
-        // human player's buildings are part of the game (no AI opponents).
+        // soldiers the map file lists.
         LoadMapBuildings();
+
+        // Players other than the human (index 0) are controlled by the AI.
+        aiPlayers.Clear();
+        for (int i = 1; i < Players.Count; i++)
+        {
+            Players[i].IsAI = true;
+            aiPlayers.Add(new AiPlayer(this, Players[i], Random));
+        }
 
         // The win target is the starting population plus a growth goal, so
         // the round is not won immediately on maps with many pre-placed
@@ -409,17 +415,12 @@ public sealed class Game
     /// Loads the buildings placed on the map as real game buildings. They
     /// are active from the start, connected to the transport network and
     /// staffed with the soldiers the map file lists (like settlers-remake,
-    /// where the map's buildings are part of the game). In a single-player
-    /// round only the human player's buildings are loaded (no AI
-    /// opponents).
+    /// where the map's buildings are part of the game).
     /// </summary>
     void LoadMapBuildings()
     {
         foreach (var mapBuilding in Map.Buildings)
         {
-            if (mapBuilding.Party != 0)
-                continue;
-
             var type = BuildingTypeFromMap(mapBuilding.BuildingType);
             if (type == null)
                 continue;
@@ -1339,12 +1340,35 @@ public sealed class Game
                     soldier.AttackTarget = found;
                     soldier.SoldierState = SoldierState.Attacking;
                 }
+                else if (soldier.MarchTarget is Position marchTarget)
+                {
+                    // Ordered to march (AI attack wave): walk toward the
+                    // target until an enemy appears or the target is
+                    // reached.
+                    soldier.SoldierState = SoldierState.Attacking;
+                    if (MapGeometry.GetDistance(soldier.Position, marchTarget) <= 1)
+                    {
+                        soldier.MarchTarget = null;
+                        soldier.SoldierState = SoldierState.Idle;
+                    }
+                    else if (soldier.State != MovableState.Walking)
+                    {
+                        var path = Pathfinder.FindPath(Map, soldier.Position, marchTarget, IsWalkable);
+                        if (path != null && path.Count > 0)
+                            soldier.SetPath(path);
+                    }
+                    soldier.Tick();
+                    continue;
+                }
             }
 
             if (soldier.AttackTarget is not Serf enemy)
             {
-                // No enemy: resume patrolling.
-                if (soldier.SoldierState == SoldierState.Attacking)
+                // No enemy: resume patrolling when back near the barracks.
+                // A soldier that marched far away (AI attack wave) stays
+                // at the target and keeps fighting.
+                if (soldier.SoldierState == SoldierState.Attacking
+                    && MapGeometry.GetDistance(soldier.Position, soldier.Barracks.Position) <= 8)
                     soldier.SoldierState = SoldierState.Idle;
                 continue;
             }
@@ -2175,6 +2199,10 @@ public sealed class Game
 
         // Military buildings recruit soldiers and attack enemies.
         TickMilitary();
+
+        // The computer opponents build and attack.
+        foreach (var ai in aiPlayers)
+            ai.Tick();
 
         // The territory is recomputed from the military buildings.
         if (Tick % 30 == 0)

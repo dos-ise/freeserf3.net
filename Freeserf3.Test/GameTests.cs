@@ -1135,10 +1135,11 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
-    public void StartGameLoadsOnlyHumanPlayerBuildings()
+    public void StartGameLoadsAllPlayerBuildings()
     {
         var map = new Map(16);
         map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Players.Add(new MapPlayerInfo { Name = "P1" });
         map.Settlers.Add(new MapSettler { Party = 0, PosX = 8, PosY = 8 });
         map.Buildings.Add(new MapBuilding { Party = 0, BuildingType = 2, PosX = 4, PosY = 4 }); // lumberjack
         map.Buildings.Add(new MapBuilding { Party = 1, BuildingType = 15, PosX = 10, PosY = 10 }); // enemy tower
@@ -1146,11 +1147,13 @@ public class GameTests : DataTestBase
         var game = new Game(map, 42);
         game.StartGame();
 
-        // Only the human player's building is loaded (no AI opponents).
-        Assert.AreEqual(1, game.Buildings.Count);
+        // All players' buildings are loaded; the AI player is marked.
+        Assert.AreEqual(2, game.Buildings.Count);
         Assert.AreEqual(BuildingType.Lumberjack, game.Buildings[0].Type);
         Assert.AreEqual(BuildingState.Active, game.Buildings[0].State);
         Assert.IsNotNull(game.Buildings[0].Flag);
+        Assert.IsTrue(game.Players[1].IsAI);
+        Assert.IsFalse(game.Players[0].IsAI);
     }
 
     /// <summary>Sets all cells of the map to grass so roads can be built.</summary>
@@ -1286,6 +1289,7 @@ public class GameTests : DataTestBase
     {
         var map = new Map(8);
         map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Players.Add(new MapPlayerInfo { Name = "P1" });
         map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
         map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 2 });
         map.Settlers.Add(new MapSettler { Party = 1, PosX = 3, PosY = 3 });
@@ -1293,10 +1297,12 @@ public class GameTests : DataTestBase
         var game = new Game(map, 42);
         game.StartGame();
 
-        Assert.AreEqual(2, game.Settlers.Count);
+        // Settlers of all players are created (the AI players too).
+        Assert.AreEqual(3, game.Settlers.Count);
         Assert.AreEqual(new Position(1, 1), game.Settlers[0].Position);
         Assert.AreEqual(0, game.Settlers[0].Player);
         Assert.AreEqual(0, game.Settlers[1].Player);
+        Assert.AreEqual(1, game.Settlers[2].Player);
     }
 
     [TestMethod]
@@ -1691,6 +1697,72 @@ public class GameTests : DataTestBase
 
         Assert.IsTrue(defeated, "The soldier did not defeat the enemy soldier.");
         Assert.IsTrue(attacker.Health > 0, "The attacking soldier should survive.");
+    }
+
+    [TestMethod]
+    public void AiPlayerBuildsBuildings()
+    {
+        var map = new Map(32);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Players.Add(new MapPlayerInfo { Name = "P1" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 1, PosX = 20, PosY = 20 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // The AI player builds a lumberjack within the first build cycles.
+        bool built = false;
+        for (int i = 0; i < 2000 && !built; i++)
+        {
+            game.TickOnce();
+            built = game.Buildings.Any(b => b.Player == 1 && b.Type == BuildingType.Lumberjack);
+        }
+
+        Assert.IsTrue(built, "The AI player did not build a lumberjack.");
+    }
+
+    [TestMethod]
+    public void AiPlayerSendsAttackWave()
+    {
+        var map = new Map(32);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Players.Add(new MapPlayerInfo { Name = "P1" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 1, PosX = 20, PosY = 20 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Give the AI a military building with a soldier and a human
+        // building to attack.
+        var aiTower = new Building(BuildingType.Tower, new Position(20, 20), 1);
+        aiTower.MarkActive();
+        game.Buildings.Add(aiTower);
+        var soldier = new Serf(1, new Position(20, 20), SerfType.Soldier)
+        {
+            Barracks = aiTower,
+            Weapon = Material.Sword,
+            SoldierState = SoldierState.Idle
+        };
+        aiTower.Soldiers.Add(soldier);
+        game.Settlers.Add(soldier);
+
+        var humanHouse = new Building(BuildingType.SmallLivinghouse, new Position(5, 5), 0);
+        humanHouse.MarkActive();
+        game.Buildings.Add(humanHouse);
+
+        // After the attack interval the soldier marches toward the human.
+        bool marching = false;
+        for (int i = 0; i < 4000 && !marching; i++)
+        {
+            game.TickOnce();
+            marching = soldier.MarchTarget != null;
+        }
+
+        Assert.IsTrue(marching, "The AI did not send an attack wave.");
+        Assert.IsTrue(MapGeometry.GetDistance(soldier.MarchTarget!.Value, humanHouse.Position) <= 2,
+            "The attack target is not near the human building.");
     }
 }
 

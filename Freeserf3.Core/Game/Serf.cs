@@ -158,6 +158,12 @@ public sealed class Serf : Movable
     /// <summary>The enemy the soldier is currently fighting, or null.</summary>
     public Serf? AttackTarget { get; set; }
 
+    /// <summary>
+    /// The position a soldier is ordered to march to (set by the AI for
+    /// attack waves). Cleared when the soldier arrives or finds an enemy.
+    /// </summary>
+    public Position? MarchTarget { get; set; }
+
     /// <summary>Ticks since the soldier's last attack.</summary>
     public int AttackTicks { get; set; }
 
