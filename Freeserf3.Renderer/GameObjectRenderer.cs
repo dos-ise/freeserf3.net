@@ -56,6 +56,9 @@ public sealed class GameObjectRenderer : IDisposable
     /// <summary>Roman settler sprites are stored in dat file 10.</summary>
     public const int SettlersFile = 10;
 
+    /// <summary>Worker action sprites (digger, bricklayer, dockworker) are stored in dat file 11.</summary>
+    public const int WorkersFile = 11;
+
     /// <summary>Map objects (trees, stones, ...) are stored in dat file 1.</summary>
     public const int ObjectsFile = 1;
 
@@ -101,11 +104,8 @@ public sealed class GameObjectRenderer : IDisposable
     /// <summary>Forester carrying a tree sequence in the settler file.</summary>
     public const int ForesterCarrySequence = 35;
 
-    /// <summary>Bricklayer (builder) walking sequence in the settler file.</summary>
-    public const int BricklayerWalkSequence = 21;
-
-    /// <summary>Bricklayer (builder) working sequence (ACTION1) in the settler file.</summary>
-    public const int BricklayerWorkSequence = 22;
+    /// <summary>Bricklayer (builder) working sequence start in the workers file (11), one per direction.</summary>
+    public const int BricklayerWorkSequence = 218;
 
     /// <summary>Walking sequence per resource worker profession.</summary>
     public static readonly Dictionary<WorkerType, int> WorkerWalkSequences = new()
@@ -249,6 +249,7 @@ public sealed class GameObjectRenderer : IDisposable
     readonly Dictionary<int, SpriteImage> buildingImages = new();
     readonly Dictionary<int, SpriteImage> constructionImages = new();
     readonly Dictionary<(int Color, int Sequence), SpriteImage[]> settlerImages = new();
+    readonly Dictionary<(int Color, int Direction), SpriteImage[]> bricklayerImages = new();
     readonly Dictionary<int, SpriteImage[]> treeImages = new();
     readonly Dictionary<int, SpriteImage> borderImages = new();
     readonly Dictionary<int, SpriteImage[]> stackImages = new();
@@ -341,15 +342,13 @@ public sealed class GameObjectRenderer : IDisposable
         // movables.txt): stonecutter ACTION1 = 25, lumberjack ACTION1 = 30,
         // forester ACTION1 = 36. The walking and carrying sequences of the
         // resource workers are loaded too (stonecutter 24/26, lumberjack
-        // 29/31, forester 34/35), plus the bricklayer (builder) walking
-        // and working sequences (21/22).
+        // 29/31, forester 34/35).
         foreach (int sequence in new[]
         {
             StonecutterWorkSequence, LumberjackWorkSequence, ForesterWorkSequence,
             StonecutterWalkSequence, StonecutterCarrySequence,
             LumberjackWalkSequence, LumberjackCarrySequence,
-            ForesterWalkSequence, ForesterCarrySequence,
-            BricklayerWalkSequence, BricklayerWorkSequence
+            ForesterWalkSequence, ForesterCarrySequence
         })
         {
             var frames = settlers.GetSettlerSequence(sequence);
@@ -399,6 +398,41 @@ public sealed class GameObjectRenderer : IDisposable
         var road = buildings.GetLandscape(RoadImage);
         if (road != null)
             roadImage = AddToAtlas(road);
+    }
+
+    /// <summary>
+    /// Loads the bricklayer (builder) working sequences from dat file 11
+    /// (sequences 218-223, one per direction, 12 frames each, from
+    /// settlers-remake movables-ROMAN.txt).
+    /// </summary>
+    public void LoadWorkers(DatFileReader workers, IEnumerable<int> playerColors)
+    {
+        var colors = playerColors.Distinct().Where(c => c >= 0 && c < PlayerColors.Length).ToList();
+        if (colors.Count == 0)
+            colors.Add(0);
+
+        for (int direction = 0; direction < 6; direction++)
+        {
+            int sequence = BricklayerWorkSequence + direction;
+            var frames = workers.GetSettlerSequence(sequence);
+            if (frames.Length == 0)
+                continue;
+
+            var torsos = workers.GetSettlerTorsoSequence(sequence);
+            var shadows = workers.GetSettlerShadowSequence(sequence);
+
+            foreach (int color in colors)
+            {
+                var images = new SpriteImage[frames.Length];
+                for (int i = 0; i < frames.Length; i++)
+                {
+                    var torso = i < torsos.Length ? torsos[i] : null;
+                    var shadow = i < shadows.Length ? shadows[i] : null;
+                    images[i] = AddToAtlas(CombineSettler(frames[i], torso, shadow, PlayerColors[color]));
+                }
+                bricklayerImages[(color, direction)] = images;
+            }
+        }
     }
 
     /// <summary>
@@ -695,16 +729,27 @@ public sealed class GameObjectRenderer : IDisposable
     }
 
     /// <summary>
-    /// Adds a bricklayer (builder) sprite. Uses the working sequence (22)
-    /// while building and the walking sequence (21) otherwise.
+    /// Adds a bricklayer (builder) sprite. While building it uses the
+    /// bricklayer working animation from dat file 11 (one sequence per
+    /// direction); otherwise it walks like a normal settler.
     /// </summary>
     public void AddBuilderMovable(Position pos, int height, int playerColor, int frame, Direction direction, bool working)
     {
-        int sequence = working ? BricklayerWorkSequence : BricklayerWalkSequence;
-        if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
+        if (working)
+        {
+            int dirIndex = ((int)direction + 3) % 6;
+            if (!bricklayerImages.TryGetValue((playerColor, dirIndex), out var frames) || frames.Length == 0)
+                return;
+
+            int index = Math.Clamp(frame, 0, frames.Length - 1);
+            AddSprite(frames[index], pos, height, 0.5f, visibleOnly: true);
+            return;
+        }
+
+        if (!settlerImages.TryGetValue((playerColor, 0), out var walkFrames) || walkFrames.Length == 0)
             return;
 
-        AddSprite(frames[DirectionFrameIndex(direction, frame, frames.Length)], pos, height, 0.5f, visibleOnly: true);
+        AddSprite(walkFrames[DirectionFrameIndex(direction, frame)], pos, height, 0.5f, visibleOnly: true);
     }
 
     /// <summary>
