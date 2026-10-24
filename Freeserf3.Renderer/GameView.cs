@@ -384,6 +384,10 @@ public sealed class GameView : IDisposable
         minimap?.Draw(mx, my, mw, mh, screenWidth, screenHeight);
         controlPanel.MousePosition = mousePosition;
         controlPanel.Draw(screenWidth, screenHeight);
+
+        // Game-over overlay when the round is won or lost.
+        if (game != null && (game.IsWon || game.IsDefeated))
+            controlPanel.DrawGameOver(game.IsWon, screenWidth, screenHeight);
     }
 
     /// <summary>Pans the camera by the given screen-space delta.</summary>

@@ -1804,5 +1804,30 @@ public class GameTests : DataTestBase
 
         Assert.IsTrue(destroyed, "The soldier did not destroy the enemy building.");
     }
+
+    [TestMethod]
+    public void HumanIsDefeatedWithoutBuildingsOrSettlers()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Remove all human buildings and settlers.
+        foreach (var building in game.Buildings.ToList())
+            game.DemolishBuilding(building);
+        foreach (var settler in game.Settlers.ToList())
+            game.Settlers.Remove(settler);
+        game.GetPlayer(0)!.Population = 0;
+        game.GetPlayer(0)!.FreeSettlers = 0;
+
+        for (int i = 0; i < 700 && !game.IsDefeated; i++)
+            game.TickOnce();
+
+        Assert.IsTrue(game.IsDefeated, "The human player should be defeated.");
+        Assert.IsFalse(game.IsWon);
+    }
 }
 

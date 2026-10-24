@@ -445,6 +445,32 @@ public sealed class ControlPanel : IDisposable
         sprites.Draw(projection, 1f);
     }
 
+    /// <summary>
+    /// Draws a full-screen game-over overlay: a dark veil with the result
+    /// text in the center. Called after the normal panel drawing.
+    /// </summary>
+    public void DrawGameOver(bool won, int screenWidth, int screenHeight)
+    {
+        UpdateScale(screenHeight);
+        sprites.Begin();
+
+        // Cover the whole screen (the panel coordinate system maps
+        // TotalHeight to the screen height).
+        float overlayW = screenWidth / scale;
+        float overlayH = screenHeight / scale;
+        AddSprite(whiteRegion, 0, 0, overlayW, overlayH, new Vector4(0f, 0f, 0f, 0.6f));
+
+        string text = won ? "VICTORY" : "DEFEAT";
+        const float glyphW = 6f, glyphH = 8f;
+        float textW = text.Length * glyphW * 5f;
+        float textH = glyphH * 7f;
+        DrawText(text, (overlayW - textW) / 2f, (overlayH - textH) / 2f, glyphW, glyphH);
+
+        var projection = Matrix4x4.CreateOrthographicOffCenter(0, screenWidth, screenHeight, 0, -1, 1);
+        atlas.Texture.Bind(0);
+        sprites.Draw(projection, 1f);
+    }
+
     (BuildingType Type, int Gui)[] CurrentBuildings() => secondaryTab switch
     {
         1 => FoodBuildings,

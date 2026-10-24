@@ -84,6 +84,9 @@ public sealed class Game
     /// <summary>Whether the round has been won.</summary>
     public bool IsWon { get; private set; }
 
+    /// <summary>Whether the human player has been defeated.</summary>
+    public bool IsDefeated { get; private set; }
+
     /// <summary>
     /// Radius in which a military building claims territory around itself
     /// (settlers-remake CommonConstants.TOWER_RADIUS).
@@ -158,6 +161,7 @@ public sealed class Game
         Buildings.Clear();
         Networks.Clear();
         IsWon = false;
+        IsDefeated = false;
 
         // Create walking settlers from the map's settlers. Settlers that
         // the map places in water are skipped (they would stand in the
@@ -2393,11 +2397,21 @@ public sealed class Game
         }
 
         // Win condition: the first player to reach the target population.
-        if (!IsWon)
+        if (!IsWon && !IsDefeated)
         {
             var human = GetPlayer(0);
             if (human != null && human.Population >= TargetPopulation)
                 IsWon = true;
+        }
+
+        // Defeat condition: the human player has no buildings and no
+        // settlers left.
+        if (!IsWon && !IsDefeated)
+        {
+            var human = GetPlayer(0);
+            if (human != null && human.Population <= 0
+                && !Buildings.Any(b => b.Player == 0 && b.State != BuildingState.Destroyed))
+                IsDefeated = true;
         }
     }
 }
