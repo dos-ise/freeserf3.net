@@ -254,14 +254,15 @@ public sealed class GameView : IDisposable
         // Start the music.
         musicManager?.Start();
 
-        // Demo: place the production chain (lumberjack, stonecutter,
-        // sawmill) so the building and resource features are visible.
-        var demoBuildings = game.PlaceDemoBuildings();
-        log(demoBuildings.Count > 0
-            ? $"Demo buildings: {string.Join(", ", demoBuildings.Select(b => $"{b.Type} at {b.Position}"))}"
-            : "No positions for demo buildings found.");
-
-        CenterOnMap(lastScreenWidth, lastScreenHeight, game.GetPlayer(0).StartPosition);
+        // Center the camera on the player's base (their first building, or
+        // the start position if they have none).
+        var start = game.GetPlayer(0).StartPosition;
+        var basePosition = game.Buildings
+            .Where(b => b.Player == 0 && b.State != BuildingState.Destroyed)
+            .OrderBy(b => MapGeometry.GetDistance(b.Position, start))
+            .Select(b => (Position?)b.Position)
+            .FirstOrDefault() ?? start;
+        CenterOnMap(lastScreenWidth, lastScreenHeight, basePosition);
         State.Gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         menu = null;
         return true;
@@ -627,23 +628,8 @@ public sealed class GameView : IDisposable
 
         int size = gameMap.Size;
 
-        // Buildings from the map file.
-        foreach (var building in gameMap.Buildings)
-        {
-            var type = BuildingTypeFromMap(building.BuildingType);
-            if (type == null)
-                continue;
-
-            int x = building.PosX;
-            int y = building.PosY;
-            if (!gameMap.IsInBounds(x, y))
-                continue;
-
-            int height = gameMap.GetCell(x, y).Height;
-            gameObjects.AddBuilding(type.Value, new Position(x, y), height);
-        }
-
-        // Buildings placed by the player (from the game simulation).
+        // Buildings from the game simulation. The map-file buildings are
+        // loaded into the game at start, so they are drawn here too.
         if (game != null)
         {
             foreach (var building in game.Buildings)

@@ -123,22 +123,35 @@ public sealed class Game
         Networks.Clear();
         IsWon = false;
 
-        // Create walking settlers from the map's settlers.
+        // Create walking settlers from the map's settlers. In a
+        // single-player round only the human player's settlers are part of
+        // the game (no AI opponents). Settlers that the map places in
+        // water are skipped (they would stand in the sea).
         Settlers.Clear();
         Collectors.Clear();
         Builders.Clear();
         ResourceWorkers.Clear();
         foreach (var mapSettler in Map.Settlers)
         {
-            var serf = new Serf(mapSettler.Party, new Position(mapSettler.PosX, mapSettler.PosY), SerfType.Worker)
+            if (mapSettler.Party != 0)
+                continue;
+
+            var position = new Position(mapSettler.PosX, mapSettler.PosY);
+            if (!IsWalkable(Map, position))
+                continue;
+
+            var serf = new Serf(mapSettler.Party, position, SerfType.Worker)
             {
                 MoveInterval = 4
             };
             Settlers.Add(serf);
         }
 
-        // Every third settler is a resource collector.
-        for (int i = 0; i < Settlers.Count; i += 3)
+        // A few settlers are resource collectors that bring the map's
+        // stacks to the player's stock. Only a small share is needed (like
+        // the real game, where carriers are assigned to the transport
+        // network).
+        for (int i = 0; i < Settlers.Count; i += 5)
         {
             Settlers[i].Type = SerfType.Collector;
             Collectors.Add(Settlers[i]);
@@ -171,16 +184,10 @@ public sealed class Game
 
         foreach (var player in Players)
         {
-            // Starting stock so the first buildings can be constructed.
-            // Generous enough for the demo production chain (lumberjack,
-            // forester, stonecutter and sawmill) plus a small buffer.
-            player.Inventory.Set(Material.Plank, 20);
-            player.Inventory.Set(Material.Stone, 20);
-
-            // A few weapons so the demo tower can recruit soldiers.
-            player.Inventory.Set(Material.Sword, 3);
-            player.Inventory.Set(Material.Bow, 2);
-            player.Inventory.Set(Material.Spear, 2);
+            // Starting stock so the first buildings can be constructed. The
+            // amount follows the map's start resources level (like
+            // settlers-remake EMapStartResources).
+            GiveStartResources(player);
 
             // The map's settlers of this player form the initial population.
             int count = Map.Settlers.Count(s => s.Party == player.Index);
@@ -188,10 +195,22 @@ public sealed class Game
             player.FreeSettlers = count;
 
             // The player's transport network with its central stock flag.
+            // The stock is placed at the player's base (their first
+            // building on the map, or the start position if they have
+            // none), so the base is not cut off by rivers or mountains.
+            // The flag sits on a walkable cell next to the base building.
             var network = new TransportNetwork(Map);
-            network.AddStockFlag(player.StartPosition, player.Index);
+            var basePos = GetPlayerBasePosition(player);
+            var stockPos = IsBuildingAt(basePos) ? FindFlagPosition(basePos) : basePos;
+            network.AddStockFlag(stockPos, player.Index);
             Networks.Add(network);
         }
+
+        // The buildings placed on the map become real buildings: they are
+        // active, connected to the transport network and staffed with the
+        // soldiers the map file lists. In a single-player round only the
+        // human player's buildings are part of the game (no AI opponents).
+        LoadMapBuildings();
 
         // The win target is the starting population plus a growth goal, so
         // the round is not won immediately on maps with many pre-placed
@@ -238,168 +257,97 @@ public sealed class Game
     }
 
     /// <summary>
-    /// Places a building for the human player near their start position so
-    /// the construction site feature is visible right away (demo helper).
-    /// Returns null if no suitable position was found.
+    /// Gets the position of the player's base: their first building on the
+    /// map (nearest to the start position), or the start position if they
+    /// have no building. The stock flag is placed here so the base is not
+    /// cut off by rivers or mountains.
     /// </summary>
-    public Building? PlaceDemoBuilding(BuildingType type)
+    Position GetPlayerBasePosition(Player player)
     {
-        var player = GetPlayer(0);
-        if (player == null)
-            return null;
+        Position? nearest = null;
+        int nearestDistance = int.MaxValue;
 
-        // Search a few cells around the start position, keeping clear of
-        // the stock flag's 3x3 footprint.
-        for (int dx = -5; dx <= 5; dx++)
+        foreach (var mapBuilding in Map.Buildings)
         {
-            for (int dy = -5; dy <= 5; dy++)
+            if (mapBuilding.Party != player.Index)
+                continue;
+
+            var pos = new Position(mapBuilding.PosX, mapBuilding.PosY);
+            int distance = MapGeometry.GetDistance(pos, player.StartPosition);
+            if (distance < nearestDistance)
             {
-                if (Math.Max(Math.Abs(dx), Math.Abs(dy)) < 3)
-                    continue;
-
-                var pos = new Position(player.StartPosition.X + dx, player.StartPosition.Y + dy);
-                if (!Map.IsInBounds(pos) || !IsWalkable(Map, pos))
-                    continue;
-                if (IsBuildingAt(pos))
-                    continue;
-
-                return PlaceBuilding(type, pos, 0);
+                nearest = pos;
+                nearestDistance = distance;
             }
         }
-        return null;
+
+        return nearest ?? player.StartPosition;
     }
 
     /// <summary>
-    /// Places the demo production chain near the start position: a
-    /// lumberjack, a stonecutter and a sawmill, plus a few stones for the
-    /// stonecutter to mine. The buildings are placed on walkable cells of
-    /// the start's connected area so their workers can reach the trees and
-    /// stones. Returns the placed buildings.
+    /// Loads the buildings placed on the map as real game buildings. They
+    /// are active from the start, connected to the transport network and
+    /// staffed with the soldiers the map file lists (like settlers-remake,
+    /// where the map's buildings are part of the game). In a single-player
+    /// round only the human player's buildings are loaded (no AI
+    /// opponents).
     /// </summary>
-    public List<Building> PlaceDemoBuildings()
+    void LoadMapBuildings()
     {
-        var placed = new List<Building>();
-        var player = GetPlayer(0);
-        if (player == null)
-            return placed;
-
-        // The walkable area connected to the start (BFS).
-        var walkable = GetWalkableArea(player.StartPosition);
-
-        // The lumberjack goes near a tree, the stonecutter and sawmill on
-        // walkable cells of the area, the forester near an empty spot.
-        var lumberPos = FindDemoPosition(walkable, player.StartPosition, p => FindNearestTree(p, 10) != null);
-        if (lumberPos.HasValue)
+        foreach (var mapBuilding in Map.Buildings)
         {
-            var building = PlaceBuilding(BuildingType.Lumberjack, lumberPos.Value, 0);
-            if (building != null)
-                placed.Add(building);
-        }
+            if (mapBuilding.Party != 0)
+                continue;
 
-        var foresterPos = FindDemoPosition(walkable, player.StartPosition, p => FindNearestTree(p, 10) == null);
-        if (foresterPos.HasValue)
-        {
-            var building = PlaceBuilding(BuildingType.Forester, foresterPos.Value, 0);
-            if (building != null)
-                placed.Add(building);
-        }
+            var type = BuildingTypeFromMap(mapBuilding.BuildingType);
+            if (type == null)
+                continue;
 
-        var stonePos = FindDemoPosition(walkable, player.StartPosition, _ => true);
-        if (stonePos.HasValue)
-        {
-            var building = PlaceBuilding(BuildingType.Stonecutter, stonePos.Value, 0);
-            if (building != null)
-                placed.Add(building);
-        }
+            var building = new Building(type.Value, new Position(mapBuilding.PosX, mapBuilding.PosY), mapBuilding.Party);
+            building.MarkActive();
+            Buildings.Add(building);
 
-        var sawPos = FindDemoPosition(walkable, player.StartPosition, _ => true);
-        if (sawPos.HasValue)
-        {
-            var building = PlaceBuilding(BuildingType.Sawmill, sawPos.Value, 0);
-            if (building != null)
-                placed.Add(building);
-        }
-
-        // A military tower so the territory and soldier features are
-        // visible. It is placed a bit further away from the start.
-        var towerPos = FindDemoPosition(walkable, player.StartPosition, p => MapGeometry.GetDistance(p, player.StartPosition) >= 8);
-        if (towerPos.HasValue)
-        {
-            var building = PlaceBuilding(BuildingType.Tower, towerPos.Value, 0);
-            if (building != null)
-                placed.Add(building);
-        }
-
-        AddDemoStones(player.StartPosition, walkable);
-        return placed;
-    }
-
-    /// <summary>Collects the walkable cells connected to the given position (BFS).</summary>
-    List<Position> GetWalkableArea(Position start)
-    {
-        var area = new List<Position>();
-        var visited = new HashSet<Position>();
-        var queue = new Queue<Position>();
-        queue.Enqueue(start);
-        visited.Add(start);
-        while (queue.Count > 0)
-        {
-            var current = queue.Dequeue();
-            area.Add(current);
-            foreach (var direction in MapGeometry.AllDirections())
+            if (mapBuilding.Party >= 0 && mapBuilding.Party < Networks.Count)
             {
-                var neighbor = current.GetNeighbor(direction);
-                if (!Map.IsInBounds(neighbor) || !visited.Add(neighbor))
-                    continue;
-                if (!IsWalkable(Map, neighbor))
-                    continue;
-                queue.Enqueue(neighbor);
+                var network = Networks[mapBuilding.Party];
+                var flag = network.AddFlag(FindFlagPosition(building.Position), mapBuilding.Party);
+                building.Flag = flag;
+
+                if (network.StockFlag != null)
+                    network.Connect(flag, network.StockFlag, mapBuilding.Party, IsWalkable);
             }
+
+            // The soldiers the map file lists for this building.
+            int soldiers = mapBuilding.CountSword1 + mapBuilding.CountSword2 + mapBuilding.CountSword3
+                + mapBuilding.CountArcher1 + mapBuilding.CountArcher2 + mapBuilding.CountArcher3
+                + mapBuilding.CountSpear1 + mapBuilding.CountSpear2 + mapBuilding.CountSpear3;
+            for (int i = 0; i < soldiers && building.HasSoldierCapacity; i++)
+                building.Soldiers.Add(new Serf(mapBuilding.Party, building.Position, SerfType.Soldier));
         }
-        return area;
     }
 
     /// <summary>
-    /// Finds a free walkable cell of the area for a demo building, starting
-    /// near the start position and satisfying the given predicate.
+    /// Gives the player their starting goods. The amount follows the map's
+    /// start resources level (1 = low, 2 = medium, 3 = high), like
+    /// settlers-remake EMapStartResources.
     /// </summary>
-    Position? FindDemoPosition(List<Position> walkable, Position start, Func<Position, bool> predicate)
+    void GiveStartResources(Player player)
     {
-        foreach (var pos in walkable.OrderBy(p => MapGeometry.GetDistance(p, start)))
-        {
-            if (MapGeometry.GetDistance(pos, start) < 3)
-                continue;
-            if (IsBuildingAt(pos))
-                continue;
-            if (!predicate(pos))
-                continue;
-            return pos;
-        }
-        return null;
-    }
+        int level = Math.Clamp(Map.StartResources, 1, 3);
+        int planks = level switch { 1 => 12, 2 => 25, _ => 30 };
+        int stone = level switch { 1 => 12, 2 => 25, _ => 30 };
+        int tools = level switch { 1 => 6, 2 => 12, _ => 16 };
+        int weapons = level switch { 1 => 2, 2 => 5, _ => 8 };
 
-    /// <summary>
-    /// Adds a few stones on walkable cells of the start's area so the
-    /// stonecutter has something to mine.
-    /// </summary>
-    void AddDemoStones(Position start, List<Position> walkable)
-    {
-        int added = 0;
-        foreach (var pos in walkable.OrderBy(p => MapGeometry.GetDistance(p, start)))
-        {
-            if (added >= 4)
-                break;
-            if (MapGeometry.GetDistance(pos, start) < 3)
-                continue;
-            if (Stones.Contains(pos) || Trees.Contains(pos) || IsBuildingAt(pos))
-                continue;
-
-            Stones.Add(pos);
-            var cell = Map.GetCell(pos);
-            cell.MapObject = 1; // big stone
-            Map.SetCell(pos, cell);
-            added++;
-        }
+        player.Inventory.Set(Material.Plank, planks);
+        player.Inventory.Set(Material.Stone, stone);
+        player.Inventory.Set(Material.Hammer, tools);
+        player.Inventory.Set(Material.Axe, tools);
+        player.Inventory.Set(Material.Pick, tools);
+        player.Inventory.Set(Material.Saw, tools);
+        player.Inventory.Set(Material.Sword, weapons);
+        player.Inventory.Set(Material.Bow, weapons);
+        player.Inventory.Set(Material.Spear, weapons);
     }
 
     /// <summary>
@@ -512,8 +460,11 @@ public sealed class Game
         return false;
     }
 
-    /// <summary>Finds the nearest non-empty resource stack, or null.</summary>
-    public ResourceStack? FindNearestStack(Position position)
+    /// <summary>
+    /// Finds the nearest non-empty resource stack within the given radius,
+    /// or null.
+    /// </summary>
+    public ResourceStack? FindNearestStack(Position position, int maxDistance = 30)
     {
         ResourceStack? nearest = null;
         int nearestDistance = int.MaxValue;
@@ -524,11 +475,11 @@ public sealed class Game
                 continue;
 
             int distance = MapGeometry.GetDistance(position, stack.Position);
-            if (distance < nearestDistance)
-            {
-                nearest = stack;
-                nearestDistance = distance;
-            }
+            if (distance > maxDistance || distance >= nearestDistance)
+                continue;
+
+            nearest = stack;
+            nearestDistance = distance;
         }
         return nearest;
     }
@@ -1418,23 +1369,15 @@ public sealed class Game
         foreach (var network in Networks)
             network.Tick();
 
-        // Settlers wander around the map; after a short pause they pick a
-        // new walk target. Collectors, builders and resource workers are
-        // driven by their own state machines.
+        // Settlers stand around when idle (like free settlers in the real
+        // game); they do not wander randomly across the map. Collectors,
+        // builders and resource workers are driven by their own state
+        // machines.
         foreach (var settler in Settlers)
         {
             if (settler.Type is SerfType.Collector or SerfType.Builder or SerfType.ResourceWorker)
                 continue;
             settler.Tick();
-            if (settler.State == MovableState.Idle)
-            {
-                settler.IdleTicks++;
-                if (settler.IdleTicks >= 30)
-                {
-                    settler.IdleTicks = 0;
-                    Wander(settler);
-                }
-            }
         }
 
         // Resource collectors walk to stacks, pick up goods and carry them

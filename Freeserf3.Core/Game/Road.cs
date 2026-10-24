@@ -40,7 +40,10 @@ public sealed class Road
         Start = start;
         End = end;
         Path = path;
-        Carrier = new Serf(player, start.Position, SerfType.Carrier);
+        Carrier = new Serf(player, start.Position, SerfType.Carrier)
+        {
+            MoveInterval = 4
+        };
         CarrierState = CarrierState.IdleAtStart;
         CarrierPathIndex = 0;
     }
@@ -71,13 +74,21 @@ public sealed class Road
 
     /// <summary>
     /// Advances the carrier by one tick: it picks up a good at a flag,
-    /// walks to the other end, drops the good and turns around.
+    /// walks to the other end, drops the good and turns around. The
+    /// carrier only walks when there is a good to transport at either
+    /// flag; otherwise it stays put (like the real game, where carriers
+    /// do not patrol empty roads).
     /// </summary>
     public void Tick()
     {
         switch (CarrierState)
         {
             case CarrierState.IdleAtStart:
+                // Only walk if there is a good to pick up here or at the
+                // other end.
+                if (Start.Count == 0 && End.Count == 0)
+                    return;
+
                 var good = Start.TakeGood();
                 if (good.HasValue)
                     Carrier.PickUp(good.Value);
@@ -106,6 +117,11 @@ public sealed class Road
                 break;
 
             case CarrierState.IdleAtEnd:
+                // Only walk back if there is a good to pick up here or at
+                // the start.
+                if (End.Count == 0 && Start.Count == 0)
+                    return;
+
                 var good2 = End.TakeGood();
                 if (good2.HasValue)
                     Carrier.PickUp(good2.Value);

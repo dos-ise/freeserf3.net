@@ -128,8 +128,9 @@ public class GameTests : DataTestBase
 
         var player = game.GetPlayer(0);
         Assert.IsNotNull(player);
-        Assert.AreEqual(20, player!.Inventory.Get(Material.Plank));
-        Assert.AreEqual(20, player.Inventory.Get(Material.Stone));
+        // Default start resources level (0 -> low): 12 planks and 12 stone.
+        Assert.AreEqual(12, player!.Inventory.Get(Material.Plank));
+        Assert.AreEqual(12, player.Inventory.Get(Material.Stone));
     }
 
     [TestMethod]
@@ -176,9 +177,9 @@ public class GameTests : DataTestBase
         Assert.AreEqual(BuildingState.Active, building.State);
         Assert.AreEqual(100, building.ConstructionProgress);
         Assert.AreEqual(0, game.Builders.Count);
-        // 2 stone + 2 plank consumed from the starting stock (20 each).
-        Assert.AreEqual(18, game.GetPlayer(0)!.Inventory.Get(Material.Stone));
-        Assert.AreEqual(18, game.GetPlayer(0)!.Inventory.Get(Material.Plank));
+        // 2 stone + 2 plank consumed from the starting stock (12 each).
+        Assert.AreEqual(10, game.GetPlayer(0)!.Inventory.Get(Material.Stone));
+        Assert.AreEqual(10, game.GetPlayer(0)!.Inventory.Get(Material.Plank));
     }
 
     [TestMethod]
@@ -358,12 +359,12 @@ public class GameTests : DataTestBase
 
         Assert.AreEqual(0, building.Output.Get(Material.Plank));
         Assert.AreEqual(0, building.Flag!.Count);
-        // 17 plank left after construction (20 - 3) plus 1 produced.
-        Assert.AreEqual(18, game.GetPlayer(0)!.Inventory.Get(Material.Plank));
+        // 9 plank left after construction (12 - 3) plus 1 produced.
+        Assert.AreEqual(10, game.GetPlayer(0)!.Inventory.Get(Material.Plank));
     }
 
     [TestMethod]
-    public void PlaceDemoBuildingCreatesConstructionSite()
+    public void PlaceBuildingCreatesConstructionSite()
     {
         var map = new Map(16);
         map.Players.Add(new MapPlayerInfo { Name = "P0" });
@@ -372,7 +373,7 @@ public class GameTests : DataTestBase
         var game = new Game(map, 42);
         game.StartGame();
 
-        var building = game.PlaceDemoBuilding(BuildingType.Sawmill);
+        var building = game.PlaceBuilding(BuildingType.Sawmill, new Position(4, 4), 0);
 
         Assert.IsNotNull(building);
         Assert.AreEqual(BuildingState.ConstructionSite, building!.State);
@@ -384,10 +385,39 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
-    public void PlaceDemoBuildingReturnsNullWithoutPlayer()
+    public void StartGameLoadsMapBuildingsAsActive()
     {
-        var game = new Game(new Map(8), 42);
-        Assert.IsNull(game.PlaceDemoBuilding(BuildingType.Sawmill));
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 8, PosY = 8 });
+        map.Buildings.Add(new MapBuilding { Party = 0, BuildingType = 2, PosX = 4, PosY = 4 }); // lumberjack
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var building = game.Buildings.FirstOrDefault(b => b.Type == BuildingType.Lumberjack);
+        Assert.IsNotNull(building);
+        Assert.AreEqual(BuildingState.Active, building!.State);
+        Assert.IsNotNull(building.Flag);
+    }
+
+    [TestMethod]
+    public void StartGameLoadsOnlyHumanPlayerBuildings()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 8, PosY = 8 });
+        map.Buildings.Add(new MapBuilding { Party = 0, BuildingType = 2, PosX = 4, PosY = 4 }); // lumberjack
+        map.Buildings.Add(new MapBuilding { Party = 1, BuildingType = 15, PosX = 10, PosY = 10 }); // enemy tower
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Only the human player's building is loaded (no AI opponents).
+        Assert.AreEqual(1, game.Buildings.Count);
+        Assert.AreEqual(BuildingType.Lumberjack, game.Buildings[0].Type);
+        Assert.AreEqual(BuildingState.Active, game.Buildings[0].State);
+        Assert.IsNotNull(game.Buildings[0].Flag);
     }
 
     /// <summary>Sets all cells of the map to grass so roads can be built.</summary>
@@ -527,10 +557,10 @@ public class GameTests : DataTestBase
         var game = new Game(map, 42);
         game.StartGame();
 
-        Assert.AreEqual(3, game.Settlers.Count);
+        Assert.AreEqual(2, game.Settlers.Count);
         Assert.AreEqual(new Position(1, 1), game.Settlers[0].Position);
         Assert.AreEqual(0, game.Settlers[0].Player);
-        Assert.AreEqual(1, game.Settlers[2].Player);
+        Assert.AreEqual(0, game.Settlers[1].Player);
     }
 
     [TestMethod]
@@ -573,11 +603,11 @@ public class GameTests : DataTestBase
 
         // The stack lost goods and the player's stock gained them.
         Assert.IsTrue(game.Stacks[0].Count < 6);
-        Assert.AreEqual(20 + (6 - game.Stacks[0].Count), game.GetPlayer(0)!.Inventory.Get(Material.Plank));
+        Assert.AreEqual(12 + (6 - game.Stacks[0].Count), game.GetPlayer(0)!.Inventory.Get(Material.Plank));
     }
 
     [TestMethod]
-    public void SettlersWanderWhenIdle()
+    public void SettlersStandStillWhenIdle()
     {
         var map = new Map(16);
         map.Players.Add(new MapPlayerInfo { Name = "P0" });
@@ -587,23 +617,16 @@ public class GameTests : DataTestBase
         var game = new Game(map, 42);
         game.StartGame();
 
-        // The second settler is a wanderer (the first is a collector).
+        // The second settler is a free settler (the first is a collector).
         var settler = game.Settlers[1];
         Assert.AreEqual(MovableState.Idle, settler.State);
 
-        // After the idle pause the settler picks a walk target.
-        for (int i = 0; i < 40; i++)
+        // Free settlers stand still; they do not wander randomly.
+        for (int i = 0; i < 100; i++)
             game.TickOnce();
 
-        Assert.AreEqual(MovableState.Walking, settler.State);
-        Assert.IsNotNull(settler.Path);
-        Assert.IsTrue(settler.Path!.Count > 0);
-
-        // Walking advances the position.
-        var start = settler.Position;
-        for (int i = 0; i < 20; i++)
-            game.TickOnce();
-        Assert.AreNotEqual(start, settler.Position);
+        Assert.AreEqual(MovableState.Idle, settler.State);
+        Assert.AreEqual(new Position(9, 8), settler.Position);
     }
 
     [TestMethod]
@@ -729,10 +752,10 @@ public class GameTests : DataTestBase
         // soldiers up to its capacity (3).
         Assert.AreEqual(3, tower.Soldiers.Count);
         Assert.IsTrue(tower.Soldiers.All(s => s.Type == SerfType.Soldier));
-        // 3 weapons consumed (sword first).
+        // 3 weapons consumed (sword, sword, spear).
         Assert.AreEqual(0, game.GetPlayer(0)!.Inventory.Get(Material.Sword));
+        Assert.AreEqual(1, game.GetPlayer(0)!.Inventory.Get(Material.Spear));
         Assert.AreEqual(2, game.GetPlayer(0)!.Inventory.Get(Material.Bow));
-        Assert.AreEqual(2, game.GetPlayer(0)!.Inventory.Get(Material.Spear));
     }
 
     [TestMethod]

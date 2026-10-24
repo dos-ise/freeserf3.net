@@ -131,6 +131,17 @@ public sealed class Building
             State = BuildingState.Active;
     }
 
+    /// <summary>
+    /// Marks the building as already built (used for buildings that exist
+    /// on the map from the start, like the map-file buildings and the
+    /// starting tower).
+    /// </summary>
+    public void MarkActive()
+    {
+        State = BuildingState.Active;
+        ConstructionProgress = 100;
+    }
+
     /// <summary>Assigns a worker to the building.</summary>
     public void AssignWorker(WorkerType worker)
     {

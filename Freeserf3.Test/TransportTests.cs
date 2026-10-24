@@ -85,12 +85,26 @@ public class TransportTests
         Assert.AreEqual(1, end.Count);
         Assert.AreEqual(Material.Plank, end.TakeGood());
 
-        // The carrier turns around and walks back to the start.
+        // Without goods at either flag the carrier stays at the end flag
+        // (it does not patrol an empty road).
         road.Tick();
         road.Tick();
         road.Tick();
+        Assert.AreEqual(new Position(2, 0), road.Carrier.Position);
+        Assert.AreEqual(CarrierState.IdleAtEnd, road.CarrierState);
+
+        // A good at the start makes the carrier walk back to pick it up.
+        start.AddGood(Material.Stone);
+        road.Tick(); // walk back (2,0) -> (2,0)
+        road.Tick(); // walk back (2,0) -> (1,0)
+        road.Tick(); // walk back (1,0) -> (0,0)
         Assert.AreEqual(new Position(0, 0), road.Carrier.Position);
         Assert.AreEqual(CarrierState.IdleAtStart, road.CarrierState);
+
+        // The carrier picks up the stone and walks to the end again.
+        road.Tick();
+        Assert.IsTrue(road.IsCarrying);
+        Assert.AreEqual(Material.Stone, road.Carrier.CarriedGood);
     }
 
     [TestMethod]
