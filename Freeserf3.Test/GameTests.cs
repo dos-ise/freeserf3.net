@@ -298,7 +298,7 @@ public class GameTests : DataTestBase
         // at the flag). The player starts with 6 saws.
         int sawsBefore = game.GetPlayer(0)!.Inventory.Get(Material.Saw);
         int productionTime = toolsmith.Definition.ProductionTime;
-        for (int i = 0; i < productionTime + 10; i++)
+        for (int i = 0; i < productionTime + 200; i++)
             game.TickOnce();
 
         Assert.AreEqual(0, toolsmith.Output.Get(Material.Hammer));

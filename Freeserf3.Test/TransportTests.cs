@@ -60,8 +60,9 @@ public class TransportTests
         Assert.IsTrue(road.IsCarrying);
         Assert.AreEqual(new Position(0, 0), road.Carrier.Position);
 
-        // 4 more ticks to walk the 4 path cells and drop at the end flag.
-        for (int i = 0; i < 4; i++)
+        // 16 more ticks to walk the 4 path cells (4 ticks per cell) and
+        // drop at the end flag.
+        for (int i = 0; i < 16; i++)
             road.Tick();
 
         Assert.IsFalse(road.IsCarrying);
@@ -78,10 +79,10 @@ public class TransportTests
 
         start.AddGood(Material.Plank);
 
-        // Pick up and walk to the end (2 cells).
+        // Pick up (1) and walk to the end (2 cells x 4 ticks = 8).
         road.Tick();
-        road.Tick();
-        road.Tick();
+        for (int i = 0; i < 8; i++)
+            road.Tick();
         Assert.AreEqual(1, end.Count);
         Assert.AreEqual(Material.Plank, end.TakeGood());
 
@@ -93,11 +94,11 @@ public class TransportTests
         Assert.AreEqual(new Position(2, 0), road.Carrier.Position);
         Assert.AreEqual(CarrierState.IdleAtEnd, road.CarrierState);
 
-        // A good at the start makes the carrier walk back to pick it up.
+        // A good at the start makes the carrier walk back to pick it up
+        // (1 tick to turn around + 2 cells x 4 ticks = 9).
         start.AddGood(Material.Stone);
-        road.Tick(); // walk back (2,0) -> (2,0)
-        road.Tick(); // walk back (2,0) -> (1,0)
-        road.Tick(); // walk back (1,0) -> (0,0)
+        for (int i = 0; i < 9; i++)
+            road.Tick();
         Assert.AreEqual(new Position(0, 0), road.Carrier.Position);
         Assert.AreEqual(CarrierState.IdleAtStart, road.CarrierState);
 
@@ -150,8 +151,8 @@ public class TransportTests
 
         flagA.AddGood(Material.Trunk);
 
-        // Pick up (1) + walk 3 cells = 4 ticks.
-        for (int i = 0; i < 4; i++)
+        // Pick up (1) + walk 3 cells x 4 ticks = 13 ticks.
+        for (int i = 0; i < 13; i++)
             network.Tick();
 
         Assert.AreEqual(1, flagB.Count);

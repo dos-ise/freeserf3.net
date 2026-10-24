@@ -82,9 +82,11 @@ public class FogOfWarTests
         var game = new Game(map, 42);
         game.StartGame();
 
-        // Build a tower at (32,32) and let it become active.
+        // Build a tower at (32,32) and let it become active. The
+        // construction materials are delivered by carriers (4 ticks per
+        // cell), so give it enough time.
         var tower = game.PlaceBuilding(BuildingType.Tower, new Position(32, 32), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 2000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, tower.State);
 

@@ -48,6 +48,12 @@ public sealed class Road
         CarrierPathIndex = 0;
     }
 
+    /// <summary>Ticks per map cell walked by the carrier (same as walking settlers).</summary>
+    public int MoveInterval { get; set; } = 4;
+
+    /// <summary>Ticks spent on the current road cell.</summary>
+    int moveCounter;
+
     /// <summary>The flag the road starts at.</summary>
     public Flag Start { get; }
 
@@ -97,6 +103,9 @@ public sealed class Road
                 break;
 
             case CarrierState.WalkingToEnd:
+                if (++moveCounter < MoveInterval)
+                    break;
+                moveCounter = 0;
                 if (CarrierPathIndex < Path.Count)
                 {
                     var next = Path[CarrierPathIndex];
@@ -130,6 +139,9 @@ public sealed class Road
                 break;
 
             case CarrierState.WalkingToStart:
+                if (++moveCounter < MoveInterval)
+                    break;
+                moveCounter = 0;
                 if (CarrierPathIndex >= 0)
                 {
                     var next = Path[CarrierPathIndex];
