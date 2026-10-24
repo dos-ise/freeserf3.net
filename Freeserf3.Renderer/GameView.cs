@@ -870,6 +870,27 @@ public sealed class GameView : IDisposable
         }
     }
 
+    /// <summary>
+    /// Cycles the tool the selected toolsmith produces. The toolsmith can
+    /// produce any of the six tools; the selection is shown in the log.
+    /// Returns true if a toolsmith was selected and cycled.
+    /// </summary>
+    public bool CycleToolsmithOutput()
+    {
+        if (game == null || selected is not Position pos)
+            return false;
+
+        var building = game.Buildings.FirstOrDefault(b => b.Position == pos);
+        if (building == null || building.Type != BuildingType.Toolsmith)
+            return false;
+
+        var tools = new[] { Material.Hammer, Material.Axe, Material.Pick, Material.Saw, Material.Scythe, Material.FishingRod };
+        int index = Array.IndexOf(tools, building.ToolsmithOutput);
+        building.ToolsmithOutput = tools[(index + 1) % tools.Length];
+        log($"Toolsmith now produces {building.ToolsmithOutput}");
+        return true;
+    }
+
     /// <summary>Places the current building type at the given position.</summary>
     void PlaceBuilding(Position pos)
     {

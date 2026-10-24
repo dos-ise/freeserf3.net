@@ -176,6 +176,9 @@ public sealed class MainWindow : IDisposable
                 if (gameView.Mode == InteractionMode.Build)
                     gameView.NextBuilding();
                 break;
+            case Key.C:
+                gameView.CycleToolsmithOutput();
+                break;
         }
     }
 
