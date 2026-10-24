@@ -39,11 +39,18 @@ public sealed class Building
         Type = type;
         Position = position;
         Player = player;
+        Health = Math.Max(50, Definition.TotalConstructionCost * 10);
     }
 
     public BuildingType Type { get; }
     public Position Position { get; }
     public int Player { get; }
+
+    /// <summary>
+    /// The building's remaining health in combat. Based on the construction
+    /// cost so bigger buildings take longer to destroy.
+    /// </summary>
+    public float Health { get; set; }
 
     public BuildingDefinition Definition => BuildingDefinition.Get(Type);
 

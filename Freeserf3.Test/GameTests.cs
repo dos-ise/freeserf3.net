@@ -1764,5 +1764,45 @@ public class GameTests : DataTestBase
         Assert.IsTrue(MapGeometry.GetDistance(soldier.MarchTarget!.Value, humanHouse.Position) <= 2,
             "The attack target is not near the human building.");
     }
+
+    [TestMethod]
+    public void SoldierDestroysEnemyBuilding()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Players.Add(new MapPlayerInfo { Name = "P1" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // An enemy soldier next to a human building with low health.
+        var attackerBarracks = new Building(BuildingType.Tower, new Position(4, 4), 1);
+        attackerBarracks.MarkActive();
+        var target = new Building(BuildingType.Lumberjack, new Position(4, 5), 0);
+        target.MarkActive();
+        target.Health = 20f;
+        game.Buildings.Add(attackerBarracks);
+        game.Buildings.Add(target);
+
+        var attacker = new Serf(1, new Position(4, 4), SerfType.Soldier)
+        {
+            Weapon = Material.Sword,
+            Health = 200f,
+            Barracks = attackerBarracks
+        };
+        attackerBarracks.Soldiers.Add(attacker);
+        game.Settlers.Add(attacker);
+
+        // The soldier attacks and destroys the building.
+        bool destroyed = false;
+        for (int i = 0; i < 2000 && !destroyed; i++)
+        {
+            game.TickOnce();
+            destroyed = !game.Buildings.Contains(target);
+        }
+
+        Assert.IsTrue(destroyed, "The soldier did not destroy the enemy building.");
+    }
 }
 

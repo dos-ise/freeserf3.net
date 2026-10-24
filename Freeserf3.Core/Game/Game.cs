@@ -1317,6 +1317,7 @@ public sealed class Game
     {
         var soldiers = Settlers.Where(s => s.Type == SerfType.Soldier && !s.IsDead).ToList();
         var kills = new List<Serf>();
+        var destroyedBuildings = new List<Building>();
 
         foreach (var soldier in soldiers)
         {
@@ -1329,6 +1330,14 @@ public sealed class Game
                     || MapGeometry.GetDistance(soldier.Position, target.Position) > SoldierSearchRadius))
             {
                 soldier.AttackTarget = null;
+            }
+
+            // Drop a building target that was destroyed or belongs to the
+            // same player.
+            if (soldier.AttackBuilding is Building attackBuilding
+                && (attackBuilding.State == BuildingState.Destroyed || attackBuilding.Player == soldier.Player))
+            {
+                soldier.AttackBuilding = null;
             }
 
             // Search for a new enemy.
@@ -1360,6 +1369,52 @@ public sealed class Game
                     soldier.Tick();
                     continue;
                 }
+                else if (soldier.AttackBuilding == null)
+                {
+                    // No settler in range: attack a nearby enemy building.
+                    var building = FindEnemyBuildingNear(soldier, 3);
+                    if (building != null)
+                    {
+                        soldier.AttackBuilding = building;
+                        soldier.SoldierState = SoldierState.Attacking;
+                    }
+                }
+            }
+
+            var stats = GetSoldierStats(soldier.Weapon);
+
+            // Attack the building target.
+            if (soldier.AttackTarget == null && soldier.AttackBuilding is Building buildingTarget)
+            {
+                int buildingDistance = MapGeometry.GetDistance(soldier.Position, buildingTarget.Position);
+                if (buildingDistance <= 3)
+                {
+                    soldier.AttackTicks++;
+                    if (soldier.AttackTicks >= SoldierAttackInterval)
+                    {
+                        soldier.AttackTicks = 0;
+                        buildingTarget.Health -= stats.Strength;
+                        if (buildingTarget.Health <= 0)
+                        {
+                            destroyedBuildings.Add(buildingTarget);
+                            soldier.AttackBuilding = null;
+                            soldier.SoldierState = SoldierState.Idle;
+                        }
+                    }
+                }
+                else
+                {
+                    // Move toward the building.
+                    var goal = buildingTarget.Flag?.Position ?? buildingTarget.Position;
+                    if (soldier.State != MovableState.Walking)
+                    {
+                        var path = Pathfinder.FindPath(Map, soldier.Position, goal, IsWalkable);
+                        if (path != null && path.Count > 0)
+                            soldier.SetPath(path);
+                    }
+                    soldier.Tick();
+                }
+                continue;
             }
 
             if (soldier.AttackTarget is not Serf enemy)
@@ -1373,7 +1428,6 @@ public sealed class Game
                 continue;
             }
 
-            var stats = GetSoldierStats(soldier.Weapon);
             int distance = MapGeometry.GetDistance(soldier.Position, enemy.Position);
 
             if (distance <= stats.Radius)
@@ -1409,6 +1463,83 @@ public sealed class Game
 
         foreach (var kill in kills)
             KillSettler(kill);
+        foreach (var building in destroyedBuildings)
+            DestroyBuilding(building);
+    }
+
+    /// <summary>
+    /// Finds the nearest enemy building within the given radius of the
+    /// soldier, or null.
+    /// </summary>
+    Building? FindEnemyBuildingNear(Serf soldier, int radius)
+    {
+        Building? nearest = null;
+        int nearestDistance = int.MaxValue;
+
+        foreach (var building in Buildings)
+        {
+            if (building.Player == soldier.Player)
+                continue;
+            if (building.State == BuildingState.Destroyed)
+                continue;
+
+            int distance = MapGeometry.GetDistance(soldier.Position, building.Position);
+            if (distance > radius || distance >= nearestDistance)
+                continue;
+
+            nearest = building;
+            nearestDistance = distance;
+        }
+        return nearest;
+    }
+
+    /// <summary>
+    /// Removes a building destroyed in combat from the game: the worker,
+    /// builder and soldiers are released and the flag is removed from the
+    /// transport network. No construction materials are returned.
+    /// </summary>
+    void DestroyBuilding(Building building)
+    {
+        var player = GetPlayer(building.Player);
+
+        // Release the resource workers.
+        for (int i = ResourceWorkers.Count - 1; i >= 0; i--)
+        {
+            if (ResourceWorkers[i].Workplace == building)
+                ReleaseResourceWorker(ResourceWorkers[i]);
+        }
+
+        if (building.HasWorker)
+        {
+            if (player != null)
+                player.FreeSettlers++;
+            building.RemoveWorker();
+        }
+
+        // Release the builder if one is working on this site.
+        for (int i = Builders.Count - 1; i >= 0; i--)
+        {
+            if (Builders[i].ConstructionSite == building)
+                ReleaseBuilder(Builders[i]);
+        }
+
+        // Release the soldiers stationed in the building.
+        if (player != null)
+            player.FreeSettlers += building.Soldiers.Count;
+        foreach (var soldier in building.Soldiers)
+            Settlers.Remove(soldier);
+        building.Soldiers.Clear();
+
+        // Remove the building's flag from the transport network.
+        if (building.Flag != null)
+        {
+            var network = Networks.Count > building.Player ? Networks[building.Player] : null;
+            network?.RemoveFlag(building.Flag);
+            building.Flag = null;
+        }
+
+        building.Destroy();
+        Buildings.Remove(building);
     }
 
     /// <summary>
