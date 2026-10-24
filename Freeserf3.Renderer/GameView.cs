@@ -816,14 +816,19 @@ public sealed class GameView : IDisposable
                         gameObjects.AddSoldier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Weapon, settler.Facing, idle, screenPos);
                 }
                 else if (settler.Type == SerfType.Builder)
-                    gameObjects.AddBuilderMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, settler.BuilderState == BuilderState.Building, idle, screenPos);
+                {
+                    bool building = settler.BuilderState == BuilderState.Building;
+                    // The bricklayer animation advances with the build ticks.
+                    gameObjects.AddBuilderMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, building ? settler.BuildTicks / 5 : frame, settler.Facing, building, idle, screenPos);
+                }
                 else if (settler.Type == SerfType.ResourceWorker)
                 {
                     // The worker is inside the house between work cycles.
                     if (settler.ResourceState == ResourceWorkerState.InsideHome)
                         continue;
                     if (settler.ResourceState == ResourceWorkerState.Working)
-                        gameObjects.AddWorkingMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, settler.Profession);
+                        // The work animation advances with the work ticks.
+                        gameObjects.AddWorkingMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, settler.WorkTicks / 5, settler.Facing, settler.Profession);
                     else if (settler.IsCarrying)
                         gameObjects.AddCarryingMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Profession);
                     else

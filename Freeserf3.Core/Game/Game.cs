@@ -66,6 +66,13 @@ public sealed class Game
     public HashSet<Position> Stones { get; } = new();
 
     /// <summary>
+    /// The 3x3 cells covered by building footprints, cached so
+    /// <see cref="IsBuildingAt"/> is O(1). Rebuilt when buildings are
+    /// placed or removed.
+    /// </summary>
+    readonly HashSet<Position> buildingCells3x3 = new();
+
+    /// <summary>
     /// The minable resources on the map (coal, iron, gold, gems, sulfur),
     /// keyed by position. The value is the remaining amount (like
     /// settlers-remake LandscapeGrid resourceAmount).
@@ -255,6 +262,7 @@ public sealed class Game
         // active, connected to the transport network and staffed with the
         // soldiers the map file lists.
         LoadMapBuildings();
+        RebuildBuildingCells3x3();
 
         // Players other than the human (index 0) are controlled by the AI.
         aiPlayers.Clear();
@@ -291,6 +299,7 @@ public sealed class Game
         var building = new Building(type, position, playerIndex);
         Buildings.Add(building);
         SetBuildingGround(type, position);
+        RebuildBuildingCells3x3();
 
         if (playerIndex >= 0 && playerIndex < Networks.Count)
         {
@@ -385,6 +394,7 @@ public sealed class Game
         }
 
         building.Destroy();
+        RebuildBuildingCells3x3();
     }
 
     /// <summary>
@@ -511,16 +521,21 @@ public sealed class Game
     /// </summary>
     Position FindFlagPosition(Position building)
     {
-        for (int dx = -2; dx <= 2; dx++)
+        // Search expanding rings around the building for a walkable cell
+        // outside the full building footprint.
+        for (int radius = 2; radius <= 10; radius++)
         {
-            for (int dy = -2; dy <= 2; dy++)
+            for (int dx = -radius; dx <= radius; dx++)
             {
-                if (Math.Max(Math.Abs(dx), Math.Abs(dy)) < 2)
-                    continue; // inside the 3x3 footprint
+                for (int dy = -radius; dy <= radius; dy++)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != radius)
+                        continue; // only the ring at this radius
 
-                var pos = new Position(building.X + dx, building.Y + dy);
-                if (Map.IsInBounds(pos) && IsWalkable(Map, pos))
-                    return pos;
+                    var pos = new Position(building.X + dx, building.Y + dy);
+                    if (Map.IsInBounds(pos) && IsWalkableForBuilder(pos))
+                        return pos;
+                }
             }
         }
 
@@ -643,29 +658,74 @@ public sealed class Game
     /// </summary>
     public bool IsBuildingAt(Position pos)
     {
+        return buildingCells3x3.Contains(pos);
+    }
+
+    /// <summary>
+    /// Rebuilds the cached 3x3 building cells from the game buildings and
+    /// the map-file buildings. Called when buildings are placed or removed.
+    /// </summary>
+    public void RebuildBuildingCells3x3()
+    {
+        buildingCells3x3.Clear();
         foreach (var building in Buildings)
         {
             if (building.State == BuildingState.Destroyed)
                 continue;
-            if (BuildingFootprintContains(building.Position, pos))
-                return true;
+            AddBuildingCells3x3(building.Position);
         }
-
         foreach (var building in Map.Buildings)
         {
-            if (BuildingFootprintContains(new Position(building.PosX, building.PosY), pos))
-                return true;
+            AddBuildingCells3x3(new Position(building.PosX, building.PosY));
         }
+    }
 
-        return false;
+    void AddBuildingCells3x3(Position building)
+    {
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                var pos = new Position(building.X + dx, building.Y + dy);
+                if (Map.IsInBounds(pos))
+                    buildingCells3x3.Add(pos);
+            }
+        }
     }
 
     /// <summary>
-    /// Whether the cell lies within a building's 3x3 footprint.
+    /// Whether the cell lies within the full (irregular) footprint of any
+    /// building. Used by the builder's pathfinding so it walks around the
+    /// whole building instead of through it.
     /// </summary>
-    static bool BuildingFootprintContains(Position building, Position pos)
+    bool IsInAnyBuildingFootprint(Position pos)
     {
-        return Math.Abs(pos.X - building.X) <= 1 && Math.Abs(pos.Y - building.Y) <= 1;
+        foreach (var building in Buildings)
+        {
+            if (building.State == BuildingState.Destroyed)
+                continue;
+            if (IsInFootprint(building.Type, building.Position, pos))
+                return true;
+        }
+        foreach (var building in Map.Buildings)
+        {
+            var type = BuildingTypeFromMap(building.BuildingType);
+            if (type == null)
+                continue;
+            if (IsInFootprint(type.Value, new Position(building.PosX, building.PosY), pos))
+                return true;
+        }
+        return false;
+    }
+
+    static bool IsInFootprint(BuildingType type, Position building, Position pos)
+    {
+        foreach (var (dx, dy) in BuildingFootprints.For(type))
+        {
+            if (building.X + dx == pos.X && building.Y + dy == pos.Y)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -989,58 +1049,87 @@ public sealed class Game
     public void RecomputeTerritory()
     {
         int size = Map.Size;
-        territory = new byte[size * size];
-        Array.Fill(territory, (byte)255); // 255 = no owner
         if (Players.Count == 0)
+        {
+            territory = Array.Empty<byte>();
             return;
+        }
 
-        var counts = new int[Players.Count];
+        // Precompute walkability once (water cells are never claimed).
+        var walkable = new bool[size * size];
         for (int y = 0; y < size; y++)
         {
             for (int x = 0; x < size; x++)
+                walkable[y * size + x] = IsWalkable(Map, new Position(x, y));
+        }
+
+        // Count per player how many military buildings cover each cell.
+        // Iterating from the buildings outward is much cheaper than
+        // scanning the whole map for every building.
+        var counts = new int[Players.Count][];
+        for (int p = 0; p < Players.Count; p++)
+            counts[p] = new int[size * size];
+
+        foreach (var building in Buildings)
+        {
+            if (building.State != BuildingState.Active || !building.Definition.IsMilitary)
+                continue;
+            if (building.Definition.SoldierCapacity <= 0)
+                continue; // barracks do not claim territory
+            if (building.Player >= 0 && building.Player < Players.Count)
+                AddTerritoryClaim(counts[building.Player], building.Position, size, walkable);
+        }
+
+        // The military buildings from the map file claim territory too
+        // (like settlers-remake, where the map's towers occupy their area
+        // from the start).
+        foreach (var mapBuilding in Map.Buildings)
+        {
+            var type = BuildingTypeFromMap(mapBuilding.BuildingType);
+            if (type == null)
+                continue;
+            var definition = BuildingDefinition.Get(type.Value);
+            if (!definition.IsMilitary || definition.SoldierCapacity <= 0)
+                continue;
+            if (mapBuilding.Party >= 0 && mapBuilding.Party < Players.Count)
+                AddTerritoryClaim(counts[mapBuilding.Party], new Position(mapBuilding.PosX, mapBuilding.PosY), size, walkable);
+        }
+
+        territory = new byte[size * size];
+        for (int i = 0; i < size * size; i++)
+        {
+            int best = 0;
+            for (int p = 1; p < Players.Count; p++)
             {
-                var pos = new Position(x, y);
-                if (!IsWalkable(Map, pos))
+                if (counts[p][i] > counts[best][i])
+                    best = p;
+            }
+            territory[i] = counts[best][i] > 0 ? (byte)best : (byte)255;
+        }
+    }
+
+    /// <summary>
+    /// Adds one territory claim for the given player around the building:
+    /// every walkable cell within <see cref="TerritoryRadius"/> is counted.
+    /// </summary>
+    void AddTerritoryClaim(int[] counts, Position center, int size, bool[] walkable)
+    {
+        for (int dy = -TerritoryRadius; dy <= TerritoryRadius; dy++)
+        {
+            for (int dx = -TerritoryRadius; dx <= TerritoryRadius; dx++)
+            {
+                if (MapGeometry.GetDistance(dx, dy) > TerritoryRadius)
                     continue;
 
-                Array.Clear(counts, 0, counts.Length);
-                foreach (var building in Buildings)
-                {
-                    if (building.State != BuildingState.Active || !building.Definition.IsMilitary)
-                        continue;
-                    if (building.Definition.SoldierCapacity <= 0)
-                        continue; // barracks do not claim territory
-                    if (MapGeometry.GetDistance(building.Position, pos) > TerritoryRadius)
-                        continue;
-                    if (building.Player >= 0 && building.Player < counts.Length)
-                        counts[building.Player]++;
-                }
+                int x = center.X + dx;
+                int y = center.Y + dy;
+                if (x < 0 || y < 0 || x >= size || y >= size)
+                    continue;
 
-                // The military buildings from the map file claim territory
-                // too (like settlers-remake, where the map's towers occupy
-                // their area from the start).
-                foreach (var mapBuilding in Map.Buildings)
-                {
-                    var type = BuildingTypeFromMap(mapBuilding.BuildingType);
-                    if (type == null)
-                        continue;
-                    var definition = BuildingDefinition.Get(type.Value);
-                    if (!definition.IsMilitary || definition.SoldierCapacity <= 0)
-                        continue;
-                    if (MapGeometry.GetDistance(new Position(mapBuilding.PosX, mapBuilding.PosY), pos) > TerritoryRadius)
-                        continue;
-                    if (mapBuilding.Party >= 0 && mapBuilding.Party < counts.Length)
-                        counts[mapBuilding.Party]++;
-                }
+                if (!walkable[y * size + x])
+                    continue;
 
-                int best = 0;
-                for (int p = 1; p < counts.Length; p++)
-                {
-                    if (counts[p] > counts[best])
-                        best = p;
-                }
-                if (counts[best] > 0)
-                    territory[y * size + x] = (byte)best;
+                counts[y * size + x]++;
             }
         }
     }
@@ -1313,15 +1402,8 @@ public sealed class Game
                     // Walk to a random point near the building.
                     soldier.SoldierIdleTicks = 0;
                     var target = FindPatrolPoint(soldier.Barracks.Position);
-                    if (target.HasValue)
-                    {
-                        var path = Pathfinder.FindPath(Map, soldier.Position, target.Value, IsWalkable);
-                        if (path != null && path.Count > 0)
-                        {
-                            soldier.SetPath(path);
-                            soldier.SoldierState = SoldierState.Patrolling;
-                        }
-                    }
+                    if (target.HasValue && TrySetPath(soldier, target.Value))
+                        soldier.SoldierState = SoldierState.Patrolling;
                     break;
 
                 case SoldierState.Patrolling:
@@ -1330,16 +1412,10 @@ public sealed class Game
                     {
                         // Walk back to the building's flag.
                         var home = soldier.Barracks.Flag?.Position ?? soldier.Barracks.Position;
-                        var homePath = Pathfinder.FindPath(Map, soldier.Position, home, IsWalkable);
-                        if (homePath != null && homePath.Count > 0)
-                        {
-                            soldier.SetPath(homePath);
+                        if (TrySetPath(soldier, home))
                             soldier.SoldierState = SoldierState.Returning;
-                        }
                         else
-                        {
                             soldier.SoldierState = SoldierState.Idle;
-                        }
                     }
                     break;
 
@@ -1757,6 +1833,7 @@ public sealed class Game
 
         building.Destroy();
         Buildings.Remove(building);
+        RebuildBuildingCells3x3();
         PlaySound?.Invoke(93); // building destroyed
     }
 
@@ -1896,26 +1973,46 @@ public sealed class Game
 
     /// <summary>
     /// Assigns a free settler as builder of the given construction site.
-    /// The builder appears at a bricklayer position around the building
-    /// (facing the building) and starts building; if none is walkable it
-    /// falls back to the site's flag.
+    /// The builder appears at the site's flag and walks to a bricklayer
+    /// position around the building (facing the building) where it starts
+    /// building; if none is walkable it builds at the flag.
     /// </summary>
     void AssignBuilder(Building building, Player player)
     {
         player.FreeSettlers--;
-        var bricklayer = FindBricklayerPosition(building);
-        var start = bricklayer.HasValue
-            ? new Position(building.Position.X + bricklayer.Value.Dx, building.Position.Y + bricklayer.Value.Dy)
-            : building.Flag?.Position ?? building.Position;
+        var start = building.Flag?.Position ?? building.Position;
         var builder = new Serf(player.Index, start, SerfType.Builder)
         {
             ConstructionSite = building,
-            BuilderState = BuilderState.Building,
-            MoveInterval = Serf.DefaultMoveInterval,
-            Facing = bricklayer?.Facing ?? Direction.SouthWest
+            BuilderState = BuilderState.WalkingToSite,
+            MoveInterval = Serf.DefaultMoveInterval
         };
         Settlers.Add(builder);
         Builders.Add(builder);
+
+        // Walk to a bricklayer position around the building, around the
+        // full footprint (not through the building).
+        var bricklayer = FindBricklayerPosition(building);
+        if (bricklayer.HasValue)
+        {
+            var target = new Position(building.Position.X + bricklayer.Value.Dx, building.Position.Y + bricklayer.Value.Dy);
+            var path = Pathfinder.FindPath(Map, start, target, (_, pos) => IsWalkableForBuilder(pos));
+            if (path != null && path.Count > 0)
+            {
+                builder.SetPath(path);
+                builder.Facing = bricklayer.Value.Facing;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Walkability for builders: the cell must be walkable and must not lie
+    /// within the full footprint of any building, so the builder walks
+    /// around buildings instead of through them.
+    /// </summary>
+    bool IsWalkableForBuilder(Position pos)
+    {
+        return IsWalkable(Map, pos) && !IsInAnyBuildingFootprint(pos);
     }
 
     /// <summary>
@@ -1927,7 +2024,7 @@ public sealed class Game
         foreach (var pos in BricklayerPositions.For(building.Type))
         {
             var candidate = new Position(building.Position.X + pos.Dx, building.Position.Y + pos.Dy);
-            if (Map.IsInBounds(candidate) && IsWalkable(Map, candidate))
+            if (Map.IsInBounds(candidate) && IsWalkableForBuilder(candidate))
                 return pos;
         }
         return null;
@@ -1955,7 +2052,7 @@ public sealed class Game
                     var away = FindWalkAwayPoint(builder.Position);
                     if (away.HasValue)
                     {
-                        var path = Pathfinder.FindPath(Map, builder.Position, away.Value, IsWalkable);
+                        var path = Pathfinder.FindPath(Map, builder.Position, away.Value, (_, pos) => IsWalkableForBuilder(pos));
                         if (path != null && path.Count > 0)
                         {
                             builder.SetPath(path);
@@ -1979,7 +2076,13 @@ public sealed class Game
                 case BuilderState.WalkingToSite:
                     builder.Tick();
                     if (builder.State == MovableState.Idle)
+                    {
+                        // Face the building while building.
+                        var bricklayer = FindBricklayerPosition(site);
+                        if (bricklayer.HasValue)
+                            builder.Facing = bricklayer.Value.Facing;
                         builder.BuilderState = BuilderState.Building;
+                    }
                     break;
 
                 case BuilderState.Building:
@@ -2005,7 +2108,7 @@ public sealed class Game
                 continue;
 
             var pos = new Position(center.X + dx, center.Y + dy);
-            if (Map.IsInBounds(pos) && IsWalkable(Map, pos))
+            if (Map.IsInBounds(pos) && IsWalkableForBuilder(pos))
                 return pos;
         }
         return null;

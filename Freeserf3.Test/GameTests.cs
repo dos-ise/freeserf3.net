@@ -199,8 +199,16 @@ public class GameTests : DataTestBase
         Assert.AreEqual(1, game.Builders.Count);
 
         var builder = game.Builders[0];
-        // The builder stands at the first walkable bricklayer position,
-        // not at the flag, and faces the building.
+        // The builder appears at the flag and walks to the bricklayer
+        // position, facing the building.
+        Assert.AreEqual(BuilderState.WalkingToSite, builder.BuilderState);
+        Assert.AreEqual(building.Flag!.Position, builder.Position);
+
+        // Let the builder walk to the site.
+        for (int i = 0; i < 500 && builder.BuilderState != BuilderState.Building; i++)
+            game.TickOnce();
+
+        Assert.AreEqual(BuilderState.Building, builder.BuilderState);
         Assert.AreEqual(new Position(3, 6), builder.Position);
         Assert.AreEqual(Direction.NorthEast, builder.Facing);
     }
@@ -378,7 +386,7 @@ public class GameTests : DataTestBase
         game.StartGame();
 
         var toolsmith = game.PlaceBuilding(BuildingType.Toolsmith, new Position(4, 4), 0);
-        for (int i = 0; i < 3000; i++)
+        for (int i = 0; i < 4000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, toolsmith.State);
         Assert.IsTrue(toolsmith.HasWorker);
@@ -712,7 +720,7 @@ public class GameTests : DataTestBase
         game.StartGame();
 
         var farm = game.PlaceBuilding(BuildingType.Farm, new Position(4, 4), 0);
-        for (int i = 0; i < 5000 && game.GetPlayer(0)!.Inventory.Get(Material.Crop) == 0; i++)
+        for (int i = 0; i < 8000 && game.GetPlayer(0)!.Inventory.Get(Material.Crop) == 0; i++)
             game.TickOnce();
 
         Assert.IsTrue(game.GetPlayer(0)!.Inventory.Get(Material.Crop) > 0, "Farm should have produced crop on grass");
@@ -730,7 +738,7 @@ public class GameTests : DataTestBase
         game.StartGame();
 
         var farm = game.PlaceBuilding(BuildingType.Farm, new Position(4, 4), 0);
-        for (int i = 0; i < 3000; i++)
+        for (int i = 0; i < 5000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, farm.State);
 
@@ -744,6 +752,11 @@ public class GameTests : DataTestBase
                 map.SetCell(x, y, cell);
             }
         }
+
+        // Clear crops already queued at the flag so only crops produced
+        // after the ground removal count.
+        while (farm.Flag != null && farm.Flag.Count > 0)
+            farm.Flag.TakeGood();
 
         int cropBefore = game.GetPlayer(0)!.Inventory.Get(Material.Crop);
         for (int i = 0; i < 5000; i++)
@@ -1751,6 +1764,7 @@ public class GameTests : DataTestBase
         var humanHouse = new Building(BuildingType.SmallLivinghouse, new Position(5, 5), 0);
         humanHouse.MarkActive();
         game.Buildings.Add(humanHouse);
+        game.RebuildBuildingCells3x3();
 
         // After the attack interval the soldier marches toward the human.
         bool marching = false;
@@ -1786,6 +1800,7 @@ public class GameTests : DataTestBase
         target.Health = 20f;
         game.Buildings.Add(attackerBarracks);
         game.Buildings.Add(target);
+        game.RebuildBuildingCells3x3();
 
         var attacker = new Serf(1, new Position(4, 4), SerfType.Soldier)
         {
@@ -1858,6 +1873,7 @@ public class GameTests : DataTestBase
         var tower = new Building(BuildingType.Tower, new Position(4, 4), 0);
         tower.MarkActive();
         game.Buildings.Add(tower);
+        game.RebuildBuildingCells3x3();
 
         var soldier = new Serf(0, new Position(4, 6), SerfType.Soldier)
         {
@@ -2000,6 +2016,7 @@ public class GameTests : DataTestBase
         var tower = new Building(BuildingType.Tower, new Position(4, 4), 0);
         tower.MarkActive();
         game.Buildings.Add(tower);
+        game.RebuildBuildingCells3x3();
 
         // Give the player a free settler and a weapon.
         game.GetPlayer(0)!.FreeSettlers = 1;
@@ -2088,6 +2105,7 @@ public class GameTests : DataTestBase
         var stonecutter = new Building(BuildingType.Stonecutter, new Position(4, 4), 0);
         stonecutter.MarkActive();
         game.Buildings.Add(stonecutter);
+        game.RebuildBuildingCells3x3();
 
         Assert.AreEqual(new Position(4, 4), stonecutter.WorkAreaCenter, "Work area starts at the building.");
 
