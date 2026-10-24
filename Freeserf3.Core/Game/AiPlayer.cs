@@ -137,17 +137,33 @@ public sealed class AiPlayer
 
     /// <summary>
     /// Finds a valid position for the building near the player's base by
-    /// sampling random points in expanding rings around it.
+    /// sampling random points in expanding rings around it. Samples are
+    /// biased toward the human player so the AI expands in its direction.
     /// </summary>
     Position? FindBuildPosition(BuildingType type)
     {
         var center = GetBasePosition();
+        var humanBase = GetHumanBasePosition();
+        int hdx = Math.Sign(humanBase.X - center.X);
+        int hdy = Math.Sign(humanBase.Y - center.Y);
+
         for (int radius = 3; radius <= 24; radius += 2)
         {
             for (int attempt = 0; attempt < 24; attempt++)
             {
-                int dx = random.Next(-radius, radius + 1);
-                int dy = random.Next(-radius, radius + 1);
+                int dx, dy;
+                if (random.Next(3) == 0)
+                {
+                    // Bias toward the human player.
+                    dx = hdx * random.Next(1, radius + 1);
+                    dy = hdy * random.Next(1, radius + 1);
+                }
+                else
+                {
+                    dx = random.Next(-radius, radius + 1);
+                    dy = random.Next(-radius, radius + 1);
+                }
+
                 var pos = new Position(center.X + dx, center.Y + dy);
                 if (!game.Map.IsInBounds(pos))
                     continue;
@@ -159,6 +175,17 @@ public sealed class AiPlayer
             }
         }
         return null;
+    }
+
+    /// <summary>The human player's base (their first building or start).</summary>
+    Position GetHumanBasePosition()
+    {
+        var human = game.GetPlayer(0);
+        if (human == null)
+            return player.StartPosition;
+
+        var building = game.Buildings.FirstOrDefault(b => b.Player == 0 && b.State != BuildingState.Destroyed);
+        return building?.Position ?? human.StartPosition;
     }
 
     /// <summary>The player's base: their first building, or the start position.</summary>
