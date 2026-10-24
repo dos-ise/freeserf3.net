@@ -458,6 +458,75 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void LumberjackCarriesTrunkToFlagAndEntersHome()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Add a tree near the building.
+        var treePos = new Position(6, 6);
+        game.Trees.Add(treePos);
+
+        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+        for (int i = 0; i < 3000 && game.ResourceWorkers.Count == 0; i++)
+            game.TickOnce();
+        Assert.AreEqual(1, game.ResourceWorkers.Count);
+        var worker = game.ResourceWorkers[0];
+
+        bool sawCarry = false, sawDrop = false, sawInside = false;
+        for (int i = 0; i < 3000; i++)
+        {
+            game.TickOnce();
+            if (worker.CarriedGood == Material.Trunk)
+                sawCarry = true;
+            if (building.Flag != null && building.Flag.Count > 0)
+                sawDrop = true;
+            if (worker.ResourceState == ResourceWorkerState.InsideHome)
+                sawInside = true;
+        }
+
+        Assert.IsFalse(game.Trees.Contains(treePos), "Tree should have been cut down");
+        Assert.IsTrue(sawCarry, "Lumberjack should carry the trunk");
+        Assert.IsTrue(sawDrop, "Lumberjack should drop the trunk at the flag");
+        Assert.IsTrue(sawInside, "Lumberjack should go inside the house");
+    }
+
+    [TestMethod]
+    public void IdleResourceWorkerGoesInsideHouse()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // No trees or stones: the lumberjack has no work and should stay
+        // inside the house instead of standing at the flag.
+        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+        for (int i = 0; i < 3000 && game.ResourceWorkers.Count == 0; i++)
+            game.TickOnce();
+        Assert.AreEqual(1, game.ResourceWorkers.Count);
+        var worker = game.ResourceWorkers[0];
+
+        bool sawInside = false;
+        for (int i = 0; i < 2000; i++)
+        {
+            game.TickOnce();
+            if (worker.ResourceState == ResourceWorkerState.InsideHome)
+                sawInside = true;
+        }
+
+        Assert.IsTrue(sawInside, "Idle resource worker should go inside the house");
+    }
+
+    [TestMethod]
     public void MineProducesFromMapResource()
     {
         var map = new Map(12);

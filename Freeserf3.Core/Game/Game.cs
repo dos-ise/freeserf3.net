@@ -1451,7 +1451,11 @@ public sealed class Game
                     var resource = FindResourceFor(building, worker.Position);
                     if (resource == null)
                     {
-                        worker.ResourceState = ResourceWorkerState.Pausing;
+                        // No work in range: go inside the house instead of
+                        // standing at the flag (like the original, where
+                        // idle workers stay in the building).
+                        worker.IdleTicks = 0;
+                        worker.ResourceState = ResourceWorkerState.InsideHome;
                         break;
                     }
 

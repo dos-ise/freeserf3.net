@@ -86,8 +86,36 @@ public sealed class GameObjectRenderer : IDisposable
     /// <summary>Lumberjack working sequence (ACTION1) in the settler file (from settlers-remake movables.txt).</summary>
     public const int LumberjackWorkSequence = 30;
 
+    /// <summary>Lumberjack walking sequence in the settler file.</summary>
+    public const int LumberjackWalkSequence = 29;
+
+    /// <summary>Lumberjack carrying a trunk sequence in the settler file.</summary>
+    public const int LumberjackCarrySequence = 31;
+
     /// <summary>Forester working sequence (ACTION1) in the settler file (from settlers-remake movables.txt).</summary>
     public const int ForesterWorkSequence = 36;
+
+    /// <summary>Forester walking sequence in the settler file.</summary>
+    public const int ForesterWalkSequence = 34;
+
+    /// <summary>Forester carrying a tree sequence in the settler file.</summary>
+    public const int ForesterCarrySequence = 35;
+
+    /// <summary>Walking sequence per resource worker profession.</summary>
+    public static readonly Dictionary<WorkerType, int> WorkerWalkSequences = new()
+    {
+        [WorkerType.Stonecutter] = StonecutterWalkSequence,
+        [WorkerType.Lumberjack] = LumberjackWalkSequence,
+        [WorkerType.Forester] = ForesterWalkSequence
+    };
+
+    /// <summary>Carrying sequence per resource worker profession.</summary>
+    public static readonly Dictionary<WorkerType, int> WorkerCarrySequences = new()
+    {
+        [WorkerType.Stonecutter] = StonecutterCarrySequence,
+        [WorkerType.Lumberjack] = LumberjackCarrySequence,
+        [WorkerType.Forester] = ForesterCarrySequence
+    };
 
     /// <summary>
     /// Soldier walking sequences per weapon in the settler file (from
@@ -305,12 +333,15 @@ public sealed class GameObjectRenderer : IDisposable
 
         // Working sequences of the resource workers (from settlers-remake
         // movables.txt): stonecutter ACTION1 = 25, lumberjack ACTION1 = 30,
-        // forester ACTION1 = 36. The stonecutter's walking sequence (24,
-        // yellow helmet) and carrying-stone sequence (26) are loaded too.
+        // forester ACTION1 = 36. The walking and carrying sequences of the
+        // resource workers are loaded too (stonecutter 24/26, lumberjack
+        // 29/31, forester 34/35).
         foreach (int sequence in new[]
         {
             StonecutterWorkSequence, LumberjackWorkSequence, ForesterWorkSequence,
-            StonecutterWalkSequence, StonecutterCarrySequence
+            StonecutterWalkSequence, StonecutterCarrySequence,
+            LumberjackWalkSequence, LumberjackCarrySequence,
+            ForesterWalkSequence, ForesterCarrySequence
         })
         {
             var frames = settlers.GetSettlerSequence(sequence);
@@ -643,25 +674,25 @@ public sealed class GameObjectRenderer : IDisposable
 
     /// <summary>
     /// Adds a resource worker walking with its profession's appearance
-    /// (the stonecutter wears a yellow helmet, sequence 24). Other
-    /// professions use the generic walking sequence.
+    /// (stonecutter yellow helmet, lumberjack, forester). The walking
+    /// sequences hold 6 directions x 12 frames (72) or 6 x 4 (24).
     /// </summary>
     public void AddWorkerMovable(Position pos, int height, int playerColor, int frame, Direction direction, WorkerType profession)
     {
-        int sequence = profession == WorkerType.Stonecutter ? StonecutterWalkSequence : 0;
+        int sequence = WorkerWalkSequences.TryGetValue(profession, out int s) ? s : 0;
         if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
             return;
 
-        AddSprite(frames[DirectionFrameIndex(direction, frame)], pos, height, 0.5f, visibleOnly: true);
+        AddSprite(frames[DirectionFrameIndex(direction, frame, frames.Length)], pos, height, 0.5f, visibleOnly: true);
     }
 
     /// <summary>
-    /// Adds a resource worker carrying the gathered good (the stonecutter
-    /// carries the stone on his back, sequence 26).
+    /// Adds a resource worker carrying the gathered good (stonecutter with
+    /// stone, lumberjack with trunk, forester with tree).
     /// </summary>
     public void AddCarryingMovable(Position pos, int height, int playerColor, int frame, WorkerType profession)
     {
-        int sequence = profession == WorkerType.Stonecutter ? StonecutterCarrySequence : 0;
+        int sequence = WorkerCarrySequences.TryGetValue(profession, out int s) ? s : 0;
         if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
             return;
 
@@ -704,6 +735,27 @@ public sealed class GameObjectRenderer : IDisposable
     {
         int offset = ((int)direction + 3) % 6 * 12;
         return offset + 1 + (frame % 11);
+    }
+
+    /// <summary>
+    /// Frame index of the walking animation for the given direction,
+    /// adapting to the sequence's frame count: 72 frames = 6 directions x
+    /// 12 (1 idle + 11 walk), 24 frames = 6 directions x 4, anything else
+    /// is treated as a flat animation.
+    /// </summary>
+    static int DirectionFrameIndex(Direction direction, int frame, int totalFrames)
+    {
+        if (totalFrames >= 72)
+        {
+            int offset = ((int)direction + 3) % 6 * 12;
+            return offset + 1 + (frame % 11);
+        }
+        if (totalFrames >= 24)
+        {
+            int offset = ((int)direction + 3) % 6 * 4;
+            return offset + (frame % 4);
+        }
+        return frame % totalFrames;
     }
 
     /// <summary>Adds a road quad at the given grid position.</summary>
