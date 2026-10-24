@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GameView.cs - Shared game view for the Windows and Android hosts
  *
  * Encapsulates everything the desktop and Android hosts have in common:
@@ -448,6 +448,13 @@ public sealed class GameView : IDisposable
             controlPanel?.ClearSelection();
             log("Mode: select");
         }
+        else
+        {
+            // Deselect the selected building.
+            selected = null;
+            if (controlPanel != null)
+                controlPanel.SelectedMapBuilding = null;
+        }
     }
 
     /// <summary>Whether the position lies on the left-side control panel.</summary>
@@ -496,6 +503,12 @@ public sealed class GameView : IDisposable
             controlPanel?.ClearSelection();
             log("Mode: select");
         }
+        else
+        {
+            selected = null;
+            if (controlPanel != null)
+                controlPanel.SelectedMapBuilding = null;
+        }
     }
 
     /// <summary>Releases all renderer resources.</summary>
@@ -518,6 +531,9 @@ public sealed class GameView : IDisposable
     {
         buildType = type;
         mode = InteractionMode.Build;
+        selected = null;
+        if (controlPanel != null)
+            controlPanel.SelectedMapBuilding = null;
         soundManager?.PlaySound(62); // UI click
         log($"Mode: build ({buildType})");
     }
@@ -870,6 +886,7 @@ public sealed class GameView : IDisposable
     void SelectAt(Position pos)
     {
         selected = null;
+        controlPanel.SelectedMapBuilding = null;
 
         if (game != null)
         {
@@ -878,6 +895,7 @@ public sealed class GameView : IDisposable
                 if (building.Position == pos)
                 {
                     selected = pos;
+                    controlPanel.SelectedMapBuilding = building;
                     log($"Selected {building.Type} at {pos} ({building.State})");
                     return;
                 }
@@ -933,6 +951,7 @@ public sealed class GameView : IDisposable
 
         game.DemolishBuilding(building);
         selected = null;
+        controlPanel.SelectedMapBuilding = null;
         log($"Demolished {building.Type} at {pos}");
         return true;
     }
@@ -993,3 +1012,4 @@ public sealed class GameView : IDisposable
         log($"Flag at {pos}");
     }
 }
+

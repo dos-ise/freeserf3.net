@@ -202,6 +202,12 @@ public sealed class ControlPanel : IDisposable
     /// <summary>The game, used to read the settler statistics.</summary>
     public Game? Game { get; set; }
 
+    /// <summary>
+    /// The building currently selected on the map. When set, the content
+    /// area shows its info and status instead of the tab content.
+    /// </summary>
+    public Building? SelectedMapBuilding { get; set; }
+
     float scale = 1f;
 
     readonly List<ClickRegion> clickRegions = new();
@@ -336,6 +342,7 @@ public sealed class ControlPanel : IDisposable
     public void ClearSelection()
     {
         selectedBuilding = null;
+        SelectedMapBuilding = null;
     }
 
     /// <summary>Whether the in-game menu is shown in the content area.</summary>
@@ -395,7 +402,12 @@ public sealed class ControlPanel : IDisposable
                 AddClickRegion(x, y, PrimaryTabWidth, PrimaryTabHeight, () => SetPrimaryTab(tab));
         }
 
-        if (systemMenuVisible)
+        if (SelectedMapBuilding != null)
+        {
+            // A building on the map is selected: show its info and status.
+            DrawBuildingInfo();
+        }
+        else if (systemMenuVisible)
         {
             // The in-game menu replaces the building selection in the content
             // area (settlers-remake gamePanel layout).
@@ -495,6 +507,89 @@ public sealed class ControlPanel : IDisposable
         // Draw the tooltip last so it is on top of the buttons.
         if (HoveredBuilding is BuildingType hovered)
             DrawTooltip(hovered);
+    }
+
+    /// <summary>
+    /// Draws the info and status of the selected building: name, state
+    /// (construction progress or active), worker, production inputs and
+    /// output, and soldiers for military buildings.
+    /// </summary>
+    void DrawBuildingInfo()
+    {
+        float contentX = ContentLeft;
+        float contentY = MiniMapHeight + ContentTop;
+        float contentW = ContentWidth;
+        float contentH = ContentHeight;
+
+        var building = SelectedMapBuilding;
+        if (building == null)
+            return;
+
+        // Close button (X) in the top-right corner of the content area.
+        const float closeSize = 16f;
+        float closeX = contentX + contentW - closeSize;
+        float closeY = contentY;
+        AddSprite(whiteRegion, closeX, closeY, closeSize, closeSize, new Vector4(0.25f, 0.25f, 0.25f, 0.9f));
+        DrawText("X", closeX + 4f, closeY + 2f, 2f, 3f);
+        AddClickRegion(closeX, closeY, closeSize, closeSize, () => SelectedMapBuilding = null);
+
+        // Building name.
+        string name = building.Type.ToString().ToUpperInvariant();
+        DrawText(name, contentX + 8f, contentY + 6f, 3f, 4f);
+
+        float y = contentY + 34f;
+        const float lineH = 20f;
+        const float glyphW = 2f, glyphH = 3f;
+
+        if (building.State == BuildingState.ConstructionSite)
+        {
+            DrawText($"CONSTRUCTION {building.ConstructionProgress}%", contentX + 8f, y, glyphW, glyphH);
+            y += lineH;
+            foreach (var (material, count) in building.Definition.ConstructionCosts)
+            {
+                int delivered = building.DeliveredMaterials.Get(material);
+                DrawText($"{material} {delivered}/{count}", contentX + 8f, y, glyphW, glyphH);
+                y += lineH;
+            }
+        }
+        else if (building.State == BuildingState.Active)
+        {
+            DrawText("ACTIVE", contentX + 8f, y, glyphW, glyphH);
+            y += lineH;
+
+            if (building.HasWorker)
+                DrawText($"WORKER: {building.Worker}", contentX + 8f, y, glyphW, glyphH);
+            else
+                DrawText("NO WORKER", contentX + 8f, y, glyphW, glyphH);
+            y += lineH;
+
+            if (building.Definition.IsProducer)
+            {
+                if (building.Definition.Inputs.Length > 0)
+                {
+                    DrawText("INPUT:", contentX + 8f, y, glyphW, glyphH);
+                    y += lineH;
+                    foreach (var input in building.Definition.Inputs)
+                    {
+                        DrawText($"  {input} {building.Input.Get(input)}", contentX + 8f, y, glyphW, glyphH);
+                        y += lineH;
+                    }
+                }
+
+                if (building.Definition.Output is Material output)
+                {
+                    var produced = building.Type == BuildingType.Toolsmith ? building.ToolsmithOutput : output;
+                    DrawText($"OUTPUT: {produced}", contentX + 8f, y, glyphW, glyphH);
+                    y += lineH;
+                }
+            }
+
+            if (building.Definition.IsMilitary)
+            {
+                DrawText($"SOLDIERS: {building.Soldiers.Count}/{building.Definition.SoldierCapacity}", contentX + 8f, y, glyphW, glyphH);
+                y += lineH;
+            }
+        }
     }
 
     /// <summary>Draws the tooltip for the given building next to the mouse.</summary>
