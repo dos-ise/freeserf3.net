@@ -1531,7 +1531,10 @@ public sealed class Game
         if (player != null)
             player.FreeSettlers += building.Soldiers.Count;
         foreach (var soldier in building.Soldiers)
+        {
+            soldier.IsDead = true;
             Settlers.Remove(soldier);
+        }
         building.Soldiers.Clear();
 
         // Remove the building's flag from the transport network.
@@ -1544,6 +1547,7 @@ public sealed class Game
 
         building.Destroy();
         Buildings.Remove(building);
+        PlaySound?.Invoke(93); // building destroyed
     }
 
     /// <summary>
@@ -1566,6 +1570,8 @@ public sealed class Game
             if (other.AttackTarget == settler)
                 other.AttackTarget = null;
         }
+
+        PlaySound?.Invoke(35); // settler killed
     }
 
     /// <summary>
