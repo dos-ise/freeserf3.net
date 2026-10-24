@@ -13,6 +13,7 @@
 
 using Freeserf3.Data;
 using Freeserf3.Render;
+using Freeserf3.Simulation;
 using Silk.NET.OpenGL;
 using System.Numerics;
 
@@ -47,6 +48,11 @@ public sealed class TerrainRenderer : IDisposable
     readonly uint ebo;
     int vertexCount;
     int indexCount;
+    int size;
+    float[] vertices = Array.Empty<float>();
+    readonly List<float> baseColors = new();
+    readonly List<int> vertexCells = new();
+    float[] cellFog = Array.Empty<float>();
 
     public TerrainRenderer(GL gl)
     {
@@ -78,7 +84,7 @@ public sealed class TerrainRenderer : IDisposable
     public void Build(MapFileReader map, DatFileReader gfx)
     {
         var area = map.Area ?? throw new InvalidOperationException("Map area not loaded.");
-        int size = map.WidthHeight;
+        size = map.WidthHeight;
 
         // Load all landscape images into the atlas.
         for (int i = 0; i < gfx.LandscapeCount; i++)
@@ -103,6 +109,8 @@ public sealed class TerrainRenderer : IDisposable
 
         vertexCount = vertices.Count / 6;
         indexCount = indices.Count;
+        this.vertices = vertices.ToArray();
+        cellFog = new float[size * size];
 
         Console.WriteLine($"Terrain: {vertexCount} vertices, {indexCount} indices, atlas {atlas.Texture.Width}x{atlas.Texture.Height}");
 
@@ -144,7 +152,7 @@ public sealed class TerrainRenderer : IDisposable
             (x, y, GetHeight(x, y)),
             (x, y + 1, GetHeight(x, y + 1)),
             (x + 1, y + 1, GetHeight(x + 1, y + 1)),
-            texUp, true, leftUp == rightUp, leftUp == centerUp);
+            texUp, true, leftUp == rightUp, leftUp == centerUp, y * size + x);
 
         // Down triangle: (x, y), (x+1, y+1), (x+1, y)
         var leftDown = GetType(x, y) ?? LandscapeType.Grass;
@@ -155,12 +163,12 @@ public sealed class TerrainRenderer : IDisposable
             (x, y, GetHeight(x, y)),
             (x + 1, y + 1, GetHeight(x + 1, y + 1)),
             (x + 1, y, GetHeight(x + 1, y)),
-            texDown, false, leftDown == rightDown, leftDown == centerDown);
+            texDown, false, leftDown == rightDown, leftDown == centerDown, y * size + x);
     }
 
     void AddTriangle(List<float> vertices, List<uint> indices,
         (int X, int Y, int Height) p1, (int X, int Y, int Height) p2, (int X, int Y, int Height) p3,
-        int textureIndex, bool up, bool leftEqualsRight, bool leftEqualsCenter)
+        int textureIndex, bool up, bool leftEqualsRight, bool leftEqualsCenter, int cellIndex)
     {
         if (!textureRegions.TryGetValue(textureIndex, out var region))
             return;
@@ -188,12 +196,12 @@ public sealed class TerrainRenderer : IDisposable
         indices.Add(baseIndex + 1);
         indices.Add(baseIndex + 2);
 
-        AddVertex(vertices, p1, texCoords[0], texCoords[1], region);
-        AddVertex(vertices, p2, texCoords[2], texCoords[3], region);
-        AddVertex(vertices, p3, texCoords[4], texCoords[5], region);
+        AddVertex(vertices, p1, texCoords[0], texCoords[1], region, cellIndex);
+        AddVertex(vertices, p2, texCoords[2], texCoords[3], region, cellIndex);
+        AddVertex(vertices, p3, texCoords[4], texCoords[5], region, cellIndex);
     }
 
-    void AddVertex(List<float> vertices, (int X, int Y, int Height) p, float u, float v, TextureRegion region)
+    void AddVertex(List<float> vertices, (int X, int Y, int Height) p, float u, float v, TextureRegion region, int cellIndex)
     {
         float color = 0.875f;
         vertices.Add(p.X);
@@ -202,6 +210,35 @@ public sealed class TerrainRenderer : IDisposable
         vertices.Add(region.U0 + u * (region.U1 - region.U0));
         vertices.Add(region.V0 + v * (region.V1 - region.V0));
         vertices.Add(color);
+        baseColors.Add(color);
+        vertexCells.Add(cellIndex);
+    }
+
+    /// <summary>
+    /// Updates the fog of war shading of the terrain. The color of each
+    /// vertex is multiplied by the visibility of its cell (like
+    /// settlers-remake Background.java): unexplored cells are black,
+    /// explored cells are half bright and visible cells are full bright.
+    /// </summary>
+    public void UpdateFog(FogOfWar fog)
+    {
+        for (int i = 0; i < cellFog.Length; i++)
+        {
+            cellFog[i] = fog.GetSight(i % size, i / size) switch
+            {
+                FogState.Unexplored => 0f,
+                FogState.Explored => 0.5f,
+                _ => 1f
+            };
+        }
+
+        for (int i = 0; i < vertexCount; i++)
+            vertices[i * 6 + 5] = baseColors[i] * cellFog[vertexCells[i]];
+
+        gl.BindVertexArray(vao);
+        gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
+        gl.BufferSubData(BufferTargetARB.ArrayBuffer, 0, vertices);
+        gl.BindVertexArray(0);
     }
 
     /// <summary>Draws the terrain with the given view transform.</summary>

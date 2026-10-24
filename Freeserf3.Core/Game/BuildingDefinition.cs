@@ -33,7 +33,8 @@ public sealed class BuildingDefinition
         bool isLivinghouse = false,
         bool isResourceProducer = false,
         int productionTime = DefaultProductionTime,
-        int soldierCapacity = 0)
+        int soldierCapacity = 0,
+        int viewDistance = 0)
     {
         Type = type;
         Worker = worker;
@@ -47,6 +48,7 @@ public sealed class BuildingDefinition
         IsResourceProducer = isResourceProducer;
         ProductionTime = productionTime;
         SoldierCapacity = soldierCapacity;
+        ViewDistance = viewDistance;
     }
 
     public BuildingType Type { get; }
@@ -68,6 +70,12 @@ public sealed class BuildingDefinition
 
     /// <summary>Number of soldiers a military building can hold.</summary>
     public int SoldierCapacity { get; }
+
+    /// <summary>
+    /// View distance for the fog of war (settlers-remake building XML
+    /// viewdistance attribute). Only military buildings see far.
+    /// </summary>
+    public int ViewDistance { get; }
 
     /// <summary>Total number of construction materials needed.</summary>
     public int TotalConstructionCost
@@ -275,16 +283,16 @@ public sealed class BuildingDefinition
 
         // --- Military buildings ---
         Add(new BuildingDefinition(BuildingType.LookoutTower, WorkerType.None,
-            new[] { (Material.Stone, 2), (Material.Plank, 2) }, isMilitary: true, soldierCapacity: 1));
+            new[] { (Material.Stone, 2), (Material.Plank, 2) }, isMilitary: true, soldierCapacity: 1, viewDistance: 50));
 
         Add(new BuildingDefinition(BuildingType.Tower, WorkerType.None,
-            new[] { (Material.Plank, 2), (Material.Stone, 3) }, isMilitary: true, soldierCapacity: 3));
+            new[] { (Material.Plank, 2), (Material.Stone, 3) }, isMilitary: true, soldierCapacity: 3, viewDistance: 38));
 
         Add(new BuildingDefinition(BuildingType.BigTower, WorkerType.None,
-            new[] { (Material.Plank, 5), (Material.Stone, 5) }, isMilitary: true, soldierCapacity: 6));
+            new[] { (Material.Plank, 5), (Material.Stone, 5) }, isMilitary: true, soldierCapacity: 6, viewDistance: 40));
 
         Add(new BuildingDefinition(BuildingType.Castle, WorkerType.None,
-            new[] { (Material.Stone, 12), (Material.Plank, 8) }, isMilitary: true, soldierCapacity: 12));
+            new[] { (Material.Stone, 12), (Material.Plank, 8) }, isMilitary: true, soldierCapacity: 12, viewDistance: 40));
 
         Add(new BuildingDefinition(BuildingType.Hospital, WorkerType.Healer,
             new[] { (Material.Plank, 3), (Material.Stone, 3) }, workRadius: 20));

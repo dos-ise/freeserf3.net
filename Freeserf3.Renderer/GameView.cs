@@ -52,6 +52,8 @@ public sealed class GameView : IDisposable
     MainMenu? menu;
     Map? gameMap;
     Game? game;
+    FogOfWar? fogOfWar;
+    int fogUpdateCounter;
 
     // Camera state.
     Vector2 cameraOffset;
@@ -217,6 +219,13 @@ public sealed class GameView : IDisposable
         gameMap = Map.FromReader(map);
         minimap = new Minimap(State.Gl, gameMap);
 
+        // Fog of war: the map starts unexplored and is revealed by the
+        // player's buildings and settlers. The fog darkens the terrain and
+        // hides map objects (like settlers-remake).
+        fogOfWar = new FogOfWar(gameMap);
+        terrain.UpdateFog(fogOfWar);
+        gameObjects?.SetFog(fogOfWar);
+
         // Left-side control panel (building selection, system button).
         controlPanel = new ControlPanel(State.Gl);
         controlPanel.Load(gameData);
@@ -252,27 +261,28 @@ public sealed class GameView : IDisposable
             ? $"Demo buildings: {string.Join(", ", demoBuildings.Select(b => $"{b.Type} at {b.Position}"))}"
             : "No positions for demo buildings found.");
 
-        CenterOnMap(lastScreenWidth, lastScreenHeight);
+        CenterOnMap(lastScreenWidth, lastScreenHeight, game.GetPlayer(0).StartPosition);
         State.Gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         menu = null;
         return true;
     }
 
     /// <summary>
-    /// Centers the camera on the map and fits it to the given screen size.
+    /// Centers the camera on the given position (or the map center) and
+    /// fits the map to the given screen size.
     /// </summary>
-    public void CenterOnMap(int screenWidth, int screenHeight)
+    public void CenterOnMap(int screenWidth, int screenHeight, Position? center = null)
     {
         if (gameMap == null)
             return;
 
         int size = gameMap.Size;
 
-        // The map's screen-space bounding box is x: [-(size-1)*8, (size-1)*16],
-        // y: [0, (size-1)*9]; its center is ((size-1)*4, (size-1)*4.5). The
-        // projection is centered on the origin, so translating the map center
-        // to (0,0) puts it in the middle of the screen.
-        cameraOffset = new Vector2(-(size - 1) * 4f, -(size - 1) * 4.5f);
+        // Center the camera on the player's start (or the map center) so
+        // the revealed fog of war area is visible at game start.
+        var target = center ?? new Position(size / 2, size / 2);
+        var (cx, cy) = MapGeometry.GridToScreen(target, 0f);
+        cameraOffset = new Vector2(-cx, -cy);
 
         // Fit the whole map into the window.
         float mapWidth = (size - 1) * 24f;
@@ -320,6 +330,17 @@ public sealed class GameView : IDisposable
                 if (game != null)
                     minimap?.Update(game);
             }
+
+            // The fog of war is updated a few times per second.
+            if (++fogUpdateCounter >= 15)
+            {
+                fogUpdateCounter = 0;
+                if (game != null && fogOfWar != null)
+                {
+                    fogOfWar.Update(game);
+                    terrain.UpdateFog(fogOfWar);
+                }
+            }
         }
 
         // Advance to the next music track when the current one finished.
@@ -343,6 +364,9 @@ public sealed class GameView : IDisposable
 
             gameObjects.Draw(viewProjection, zoom);
         }
+
+        // The fog of war is baked into the terrain color and the game
+        // objects, so nothing extra is drawn here.
 
         // Minimap on top of the control panel, then the panel itself.
         var (mx, my, mw, mh) = controlPanel.GetMiniMapRect(screenWidth, screenHeight);

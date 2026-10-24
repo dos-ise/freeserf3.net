@@ -204,6 +204,7 @@ public sealed class GameObjectRenderer : IDisposable
     SpriteImage? flagImage;
     SpriteImage? roadImage;
     TextureRegion whiteRegion;
+    FogOfWar? fog;
 
     // Original settler colors (from settlers-remake MapDrawContext).
     public static readonly (byte R, byte G, byte B)[] PlayerColors =
@@ -514,6 +515,12 @@ public sealed class GameObjectRenderer : IDisposable
         sprites.Begin();
     }
 
+    /// <summary>Sets the fog of war used to hide and dim map objects.</summary>
+    public void SetFog(FogOfWar? fog)
+    {
+        this.fog = fog;
+    }
+
     /// <summary>Adds a building sprite at the given grid position.</summary>
     public void AddBuilding(BuildingType type, Position pos, int height)
     {
@@ -564,7 +571,7 @@ public sealed class GameObjectRenderer : IDisposable
         if (!settlerImages.TryGetValue((playerColor, 0), out var frames) || frames.Length == 0)
             return;
 
-        AddSprite(frames[DirectionFrameIndex(direction, frame)], pos, height, 0.5f);
+        AddSprite(frames[DirectionFrameIndex(direction, frame)], pos, height, 0.5f, visibleOnly: true);
     }
 
     /// <summary>
@@ -585,7 +592,7 @@ public sealed class GameObjectRenderer : IDisposable
             return;
 
         int index = Math.Clamp(frame, 0, frames.Length - 1);
-        AddSprite(frames[index], pos, height, 0.5f);
+        AddSprite(frames[index], pos, height, 0.5f, visibleOnly: true);
     }
 
     /// <summary>
@@ -599,7 +606,7 @@ public sealed class GameObjectRenderer : IDisposable
         if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
             return;
 
-        AddSprite(frames[DirectionFrameIndex(direction, frame)], pos, height, 0.5f);
+        AddSprite(frames[DirectionFrameIndex(direction, frame)], pos, height, 0.5f, visibleOnly: true);
     }
 
     /// <summary>
@@ -668,7 +675,7 @@ public sealed class GameObjectRenderer : IDisposable
         if (!borderImages.TryGetValue(playerColor, out var image))
             return;
 
-        AddSprite(image, pos, height, 0.05f);
+        AddSprite(image, pos, height, 0.05f, visibleOnly: true);
     }
 
     /// <summary>
@@ -698,6 +705,20 @@ public sealed class GameObjectRenderer : IDisposable
             return;
 
         var image = frames[0];
+        if (fog != null)
+        {
+            var state = fog.GetSight(pos);
+            if (state == FogState.Unexplored)
+                return;
+            if (state == FogState.Explored)
+            {
+                var (ex, ey) = MapGeometry.GridToScreen(pos, height);
+                float ew = image.Width * 0.5f;
+                float eh = image.Height * 0.5f;
+                sprites.Add(new Sprite(image.Region, ex + image.OffsetX * 0.5f, ey + image.OffsetY * 0.5f - 20f, ew, eh, 0.6f, new Vector4(0.5f, 0.5f, 0.5f, 1f)));
+                return;
+            }
+        }
         var (mapX, mapY) = MapGeometry.GridToScreen(pos, height);
         // Draw a small version of the good above the settler.
         float w = image.Width * 0.5f;
@@ -723,11 +744,35 @@ public sealed class GameObjectRenderer : IDisposable
         sprites.Add(new Sprite(whiteRegion, mapX - 8f, mapY - 8f, 16f, 16f, 0.9f, new Vector4(1f, 0.9f, 0.2f, 0.5f)));
     }
 
-    void AddSprite(in SpriteImage image, Position pos, int height, float z)
+    void AddSprite(in SpriteImage image, Position pos, int height, float z, bool visibleOnly = false)
     {
-        var (mapX, mapY) = MapGeometry.GridToScreen(pos, height);
-        float x = mapX + image.OffsetX;
-        float y = mapY + image.OffsetY;
+        if (fog != null)
+        {
+            var state = fog.GetSight(pos);
+            if (visibleOnly)
+            {
+                // Movables are only drawn in fully visible cells.
+                if (state != FogState.Visible)
+                    return;
+            }
+            else if (state == FogState.Unexplored)
+            {
+                // Static objects are hidden in unexplored cells.
+                return;
+            }
+            else if (state == FogState.Explored)
+            {
+                // Explored cells show a dimmed version of the object.
+                var (mapX, mapY) = MapGeometry.GridToScreen(pos, height);
+                sprites.Add(new Sprite(image.Region, mapX + image.OffsetX, mapY + image.OffsetY,
+                    image.Width, image.Height, z, new Vector4(0.5f, 0.5f, 0.5f, 1f)));
+                return;
+            }
+        }
+
+        var (mx, my) = MapGeometry.GridToScreen(pos, height);
+        float x = mx + image.OffsetX;
+        float y = my + image.OffsetY;
         sprites.Add(image.Region, x, y, image.Width, image.Height, z);
     }
 
