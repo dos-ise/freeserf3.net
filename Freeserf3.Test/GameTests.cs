@@ -1953,5 +1953,38 @@ public class GameTests : DataTestBase
         Assert.IsFalse(game.Players[1].IsActive, "The AI player should be defeated.");
         Assert.IsTrue(game.Players[0].IsActive, "The human player stays active.");
     }
+
+    [TestMethod]
+    public void SoldierRetreatsWhenWounded()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Players.Add(new MapPlayerInfo { Name = "P1" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // A wounded soldier retreats to its barracks and recovers.
+        var barracks = new Building(BuildingType.Tower, new Position(4, 4), 0);
+        barracks.MarkActive();
+        var soldier = new Serf(0, new Position(4, 6), SerfType.Soldier)
+        {
+            Weapon = Material.Sword,
+            Health = 20f,
+            Barracks = barracks
+        };
+        barracks.Soldiers.Add(soldier);
+        game.Settlers.Add(soldier);
+
+        bool recovered = false;
+        for (int i = 0; i < 2000 && !recovered; i++)
+        {
+            game.TickOnce();
+            recovered = soldier.SoldierState == SoldierState.Idle && soldier.Health >= 100f;
+        }
+
+        Assert.IsTrue(recovered, "The wounded soldier should retreat and recover.");
+    }
 }
 

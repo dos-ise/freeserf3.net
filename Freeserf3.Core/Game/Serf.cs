@@ -95,7 +95,10 @@ public enum SoldierState
     Returning,
 
     /// <summary>Moving toward or fighting an enemy.</summary>
-    Attacking
+    Attacking,
+
+    /// <summary>Walking back to the building to recover health.</summary>
+    Retreating
 }
 
 /// <summary>
@@ -193,6 +196,9 @@ public sealed class Serf : Movable
     /// Ticks spent in the attack animation (drives the ACTION1 frames).
     /// </summary>
     public int AttackAnimationTicks { get; set; }
+
+    /// <summary>Ticks spent recovering at the barracks after a retreat.</summary>
+    public int RetreatTicks { get; set; }
 
     /// <summary>The soldier's remaining health.</summary>
     public float Health { get; set; } = 100f;

@@ -1332,6 +1332,49 @@ public sealed class Game
             if (!soldier.IsDeployed && (soldier.Barracks == null || soldier.Barracks.State != BuildingState.Active))
                 continue;
 
+            // A soldier with low health retreats to its barracks to
+            // recover (like settlers-remake, where soldiers flee when
+            // wounded).
+            if (soldier.SoldierState != SoldierState.Retreating
+                && soldier.Health < GetSoldierStats(soldier.Weapon).Health * 0.25f)
+            {
+                soldier.AttackTarget = null;
+                soldier.AttackBuilding = null;
+                soldier.MarchTarget = null;
+                soldier.GarrisonTarget = null;
+                soldier.OrderedAttack = false;
+                soldier.SoldierState = SoldierState.Retreating;
+            }
+
+            if (soldier.SoldierState == SoldierState.Retreating)
+            {
+                var home = soldier.Barracks?.Flag?.Position ?? soldier.Barracks?.Position;
+                if (home is Position retreatHome)
+                {
+                    if (MapGeometry.GetDistance(soldier.Position, retreatHome) <= 1)
+                    {
+                        // Recovering at the barracks: after a while the
+                        // health is restored and the soldier resumes.
+                        soldier.RetreatTicks++;
+                        if (soldier.RetreatTicks >= 300)
+                        {
+                            soldier.Health = GetSoldierStats(soldier.Weapon).Health;
+                            soldier.RetreatTicks = 0;
+                            soldier.SoldierState = SoldierState.Idle;
+                        }
+                    }
+                    else if (soldier.State != MovableState.Walking)
+                    {
+                        var path = Pathfinder.FindPath(Map, soldier.Position, retreatHome, IsWalkable);
+                        if (path != null && path.Count > 0)
+                            soldier.SetPath(path);
+                        soldier.Tick();
+                    }
+                    continue;
+                }
+                soldier.SoldierState = SoldierState.Idle;
+            }
+
             // A soldier ordered to garrison marches to the building and is
             // stationed there on arrival.
             if (soldier.GarrisonTarget is Building garrison)
