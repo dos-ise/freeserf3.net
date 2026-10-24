@@ -67,6 +67,16 @@ public sealed class TransportNetwork
     }
 
     /// <summary>
+    /// Removes a flag and all roads connected to it from the network
+    /// (used when a building is demolished).
+    /// </summary>
+    public void RemoveFlag(Flag flag)
+    {
+        flags.Remove(flag);
+        roads.RemoveAll(road => road.Start == flag || road.End == flag);
+    }
+
+    /// <summary>
     /// Connects two flags with a road served by a carrier. The path is
     /// found with the pathfinder; returns null if no path exists.
     /// </summary>

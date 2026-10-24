@@ -891,6 +891,26 @@ public sealed class GameView : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Demolishes the selected building. Half of the construction
+    /// materials go back to the stock and the workers are released.
+    /// Returns true if a building was demolished.
+    /// </summary>
+    public bool DemolishSelectedBuilding()
+    {
+        if (game == null || selected is not Position pos)
+            return false;
+
+        var building = game.Buildings.FirstOrDefault(b => b.Position == pos);
+        if (building == null || building.State == BuildingState.Destroyed)
+            return false;
+
+        game.DemolishBuilding(building);
+        selected = null;
+        log($"Demolished {building.Type} at {pos}");
+        return true;
+    }
+
     /// <summary>Places the current building type at the given position.</summary>
     void PlaceBuilding(Position pos)
     {

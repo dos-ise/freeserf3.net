@@ -678,6 +678,88 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void DemolishReturnsMaterialsAndReleasesWorker()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var player = game.GetPlayer(0)!;
+        int planksBefore = player.Inventory.Get(Material.Plank);
+        int stonesBefore = player.Inventory.Get(Material.Stone);
+
+        // Build a lumberjack (2 stone + 2 plank) and let it become active
+        // with a worker.
+        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, building.State);
+        Assert.IsTrue(building.HasWorker);
+        int freeBefore = player.FreeSettlers;
+
+        game.DemolishBuilding(building);
+
+        Assert.AreEqual(BuildingState.Destroyed, building.State);
+        Assert.IsFalse(building.HasWorker);
+        // The building cost 2 stone + 2 plank; half (1 each) is returned.
+        Assert.AreEqual(stonesBefore - 2 + 1, player.Inventory.Get(Material.Stone));
+        Assert.AreEqual(planksBefore - 2 + 1, player.Inventory.Get(Material.Plank));
+        // The worker is released.
+        Assert.AreEqual(freeBefore + 1, player.FreeSettlers);
+    }
+
+    [TestMethod]
+    public void DemolishReleasesSoldiers()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 3, PosY = 3 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 4, PosY = 4 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var tower = game.PlaceBuilding(BuildingType.Tower, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, tower.State);
+        Assert.IsTrue(tower.Soldiers.Count > 0);
+        int freeBefore = game.GetPlayer(0)!.FreeSettlers;
+
+        game.DemolishBuilding(tower);
+
+        Assert.AreEqual(BuildingState.Destroyed, tower.State);
+        Assert.AreEqual(0, tower.Soldiers.Count);
+        Assert.AreEqual(freeBefore + 3, game.GetPlayer(0)!.FreeSettlers);
+    }
+
+    [TestMethod]
+    public void DemolishRemovesFlagFromNetwork()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+        Assert.IsNotNull(building.Flag);
+        int flagsBefore = game.Networks[0].Flags.Count;
+
+        game.DemolishBuilding(building);
+
+        Assert.IsNull(building.Flag);
+        Assert.AreEqual(flagsBefore - 1, game.Networks[0].Flags.Count);
+    }
+
+    [TestMethod]
     public void ForesterPlantsTree()
     {
         var map = new Map(12);

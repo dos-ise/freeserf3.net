@@ -273,6 +273,73 @@ public sealed class Game
     }
 
     /// <summary>
+    /// Demolishes a building: half of the construction materials go back
+    /// to the player's stock, the worker and soldiers are released and the
+    /// building's flag is removed from the transport network (like
+    /// settlers-remake Building.kill with placeReusableMaterials).
+    /// </summary>
+    public void DemolishBuilding(Building building)
+    {
+        if (building.State == BuildingState.Destroyed)
+            return;
+
+        var player = GetPlayer(building.Player);
+
+        // Half of the construction materials are returned to the stock.
+        if (player != null)
+        {
+            foreach (var (material, count) in building.Definition.ConstructionCosts)
+            {
+                int returned = count / 2;
+                if (returned > 0)
+                    player.Inventory.Add(material, returned);
+            }
+        }
+
+        // Release the worker. Resource workers are released via their serf
+        // (which also frees the settler); regular workers are released
+        // directly.
+        bool releasedResourceWorker = false;
+        for (int i = ResourceWorkers.Count - 1; i >= 0; i--)
+        {
+            if (ResourceWorkers[i].Workplace == building)
+            {
+                ReleaseResourceWorker(ResourceWorkers[i]);
+                releasedResourceWorker = true;
+            }
+        }
+
+        if (building.HasWorker && !releasedResourceWorker)
+        {
+            if (player != null)
+                player.FreeSettlers++;
+            building.RemoveWorker();
+        }
+
+        // Release the builder if one is working on this site.
+        for (int i = Builders.Count - 1; i >= 0; i--)
+        {
+            if (Builders[i].ConstructionSite == building)
+                ReleaseBuilder(Builders[i]);
+        }
+
+        // Release the soldiers stationed in the building.
+        if (player != null)
+            player.FreeSettlers += building.Soldiers.Count;
+        building.Soldiers.Clear();
+
+        // Remove the building's flag from the transport network.
+        if (building.Flag != null)
+        {
+            var network = Networks.Count > building.Player ? Networks[building.Player] : null;
+            network?.RemoveFlag(building.Flag);
+            building.Flag = null;
+        }
+
+        building.Destroy();
+    }
+
+    /// <summary>
     /// Gets the position of the player's base: their first building on the
     /// map (nearest to the start position), or the start position if they
     /// have no building. The stock flag is placed here so the base is not

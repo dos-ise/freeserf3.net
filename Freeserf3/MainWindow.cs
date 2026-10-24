@@ -179,6 +179,9 @@ public sealed class MainWindow : IDisposable
             case Key.C:
                 gameView.CycleToolsmithOutput();
                 break;
+            case Key.X:
+                gameView.DemolishSelectedBuilding();
+                break;
         }
     }
 
