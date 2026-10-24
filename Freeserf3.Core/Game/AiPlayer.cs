@@ -80,6 +80,11 @@ public sealed class AiPlayer
         int towers = Count(BuildingType.Tower);
         int stonecutters = Count(BuildingType.Stonecutter);
         int livingHouses = CountLivingHouses();
+        int ironmines = Count(BuildingType.Ironmine);
+        int coalmines = Count(BuildingType.Coalmine);
+        int ironmelts = Count(BuildingType.Ironmelt);
+        int weaponsmiths = Count(BuildingType.Weaponsmith);
+        int toolsmiths = Count(BuildingType.Toolsmith);
 
         if (lumberjacks == 0) return BuildingType.Lumberjack;
         if (sawmills == 0) return BuildingType.Sawmill;
@@ -92,6 +97,17 @@ public sealed class AiPlayer
         if (towers < 2) return BuildingType.Tower;
         if (stonecutters == 0) return BuildingType.Stonecutter;
         if (livingHouses < 4) return BuildingType.SmallLivinghouse;
+
+        // Military production chain: iron and coal for weapons.
+        if (ironmines == 0) return BuildingType.Ironmine;
+        if (coalmines == 0) return BuildingType.Coalmine;
+        if (ironmelts == 0) return BuildingType.Ironmelt;
+        if (weaponsmiths == 0) return BuildingType.Weaponsmith;
+        if (toolsmiths == 0) return BuildingType.Toolsmith;
+        if (ironmines < 2) return BuildingType.Ironmine;
+        if (coalmines < 2) return BuildingType.Coalmine;
+        if (weaponsmiths < 2) return BuildingType.Weaponsmith;
+
         return BuildingType.Tower;
     }
 
