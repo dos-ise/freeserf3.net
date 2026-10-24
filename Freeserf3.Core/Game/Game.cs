@@ -1332,6 +1332,41 @@ public sealed class Game
             if (!soldier.IsDeployed && (soldier.Barracks == null || soldier.Barracks.State != BuildingState.Active))
                 continue;
 
+            // A soldier ordered to garrison marches to the building and is
+            // stationed there on arrival.
+            if (soldier.GarrisonTarget is Building garrison)
+            {
+                if (garrison.State != BuildingState.Active || garrison.Player != soldier.Player
+                    || !garrison.HasSoldierCapacity)
+                {
+                    soldier.GarrisonTarget = null;
+                }
+                else if (MapGeometry.GetDistance(soldier.Position, garrison.Position) <= 2)
+                {
+                    garrison.Soldiers.Add(soldier);
+                    soldier.Barracks = garrison;
+                    soldier.GarrisonTarget = null;
+                    soldier.MarchTarget = null;
+                    soldier.AttackTarget = null;
+                    soldier.AttackBuilding = null;
+                    soldier.SoldierState = SoldierState.Idle;
+                    Settlers.Remove(soldier);
+                    continue;
+                }
+                else
+                {
+                    var goal = garrison.Flag?.Position ?? garrison.Position;
+                    if (soldier.State != MovableState.Walking)
+                    {
+                        var path = Pathfinder.FindPath(Map, soldier.Position, goal, IsWalkable);
+                        if (path != null && path.Count > 0)
+                            soldier.SetPath(path);
+                    }
+                    soldier.Tick();
+                    continue;
+                }
+            }
+
             // Drop a target that died, belongs to the same player or fled.
             // Ordered targets are kept even when far away.
             if (soldier.AttackTarget is Serf target

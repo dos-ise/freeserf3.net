@@ -1844,6 +1844,44 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void SoldierGarrisonsInBuilding()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // A soldier ordered to garrison marches to the tower and is
+        // stationed there.
+        var tower = new Building(BuildingType.Tower, new Position(4, 4), 0);
+        tower.MarkActive();
+        game.Buildings.Add(tower);
+
+        var soldier = new Serf(0, new Position(4, 6), SerfType.Soldier)
+        {
+            Weapon = Material.Sword,
+            Health = 100f,
+            Barracks = tower
+        };
+        tower.Soldiers.Add(soldier);
+        game.Settlers.Add(soldier);
+
+        soldier.GarrisonTarget = tower;
+        soldier.SoldierState = SoldierState.Attacking;
+
+        bool garrisoned = false;
+        for (int i = 0; i < 2000 && !garrisoned; i++)
+        {
+            game.TickOnce();
+            garrisoned = !game.Settlers.Contains(soldier) && tower.Soldiers.Contains(soldier);
+        }
+
+        Assert.IsTrue(garrisoned, "The soldier did not garrison in the tower.");
+    }
+
+    [TestMethod]
     public void HumanIsDefeatedWithoutBuildingsOrSettlers()
     {
         var map = new Map(16);

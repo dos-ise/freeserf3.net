@@ -162,6 +162,12 @@ public sealed class Serf : Movable
     /// </summary>
     public bool OrderedAttack { get; set; }
 
+    /// <summary>
+    /// The military building the soldier was ordered to garrison in. When
+    /// the soldier arrives, it is stationed in the building.
+    /// </summary>
+    public Building? GarrisonTarget { get; set; }
+
     /// <summary>The weapon the soldier carries (sword, spear or bow).</summary>
     public Material Weapon { get; set; } = Material.Sword;
 

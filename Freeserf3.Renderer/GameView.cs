@@ -489,6 +489,26 @@ public sealed class GameView : IDisposable
         if (soldier == null || game == null)
             return;
 
+        // Garrison in the player's own military building.
+        foreach (var building in game.Buildings)
+        {
+            if (building.Player != soldier.Player || !building.Definition.IsMilitary)
+                continue;
+            if (building.State != BuildingState.Active || !building.HasSoldierCapacity)
+                continue;
+            if (!IsInBuildingFootprint(building, pos))
+                continue;
+
+            soldier.GarrisonTarget = building;
+            soldier.AttackTarget = null;
+            soldier.AttackBuilding = null;
+            soldier.MarchTarget = null;
+            soldier.OrderedAttack = false;
+            soldier.SoldierState = SoldierState.Attacking;
+            log($"Soldier ordered to garrison in {building.Type} at {pos}");
+            return;
+        }
+
         // Attack an enemy settler at the position.
         foreach (var settler in game.Settlers)
         {
@@ -500,6 +520,7 @@ public sealed class GameView : IDisposable
             soldier.AttackTarget = settler;
             soldier.AttackBuilding = null;
             soldier.MarchTarget = null;
+            soldier.GarrisonTarget = null;
             soldier.OrderedAttack = true;
             soldier.SoldierState = SoldierState.Attacking;
             log($"Soldier ordered to attack {settler.Type} at {pos}");
@@ -517,6 +538,7 @@ public sealed class GameView : IDisposable
             soldier.AttackBuilding = building;
             soldier.AttackTarget = null;
             soldier.MarchTarget = null;
+            soldier.GarrisonTarget = null;
             soldier.OrderedAttack = true;
             soldier.SoldierState = SoldierState.Attacking;
             log($"Soldier ordered to attack {building.Type} at {pos}");
@@ -527,6 +549,7 @@ public sealed class GameView : IDisposable
         soldier.AttackTarget = null;
         soldier.AttackBuilding = null;
         soldier.MarchTarget = pos;
+        soldier.GarrisonTarget = null;
         soldier.OrderedAttack = false;
         soldier.SoldierState = SoldierState.Attacking;
         log($"Soldier ordered to march to {pos}");
