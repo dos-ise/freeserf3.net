@@ -350,6 +350,11 @@ public sealed class Game
         player.Inventory.Set(Material.Sword, weapons);
         player.Inventory.Set(Material.Bow, weapons);
         player.Inventory.Set(Material.Spear, weapons);
+        // Starting food so the initial settlers do not starve right away.
+        int food = level switch { 1 => 10, 2 => 20, _ => 30 };
+        player.Inventory.Set(Material.Bread, food);
+        player.Inventory.Set(Material.Fish, food);
+        player.Inventory.Set(Material.Meat, food);
     }
 
     /// <summary>
@@ -884,6 +889,12 @@ public sealed class Game
 
     /// <summary>Ticks between two build actions of a builder.</summary>
     const int BuildActionTicks = 20;
+
+    /// <summary>
+    /// The food types settlers eat, in order of preference (like
+    /// settlers-remake, where bread is the primary food).
+    /// </summary>
+    static readonly Material[] FoodMaterials = { Material.Bread, Material.Fish, Material.Meat };
 
     /// <summary>
     /// Assigns a free settler as builder of the given construction site.
@@ -1427,20 +1438,56 @@ public sealed class Game
         if (Tick % 30 == 0)
             RecomputeTerritory();
 
-        // Living houses grow the population over time.
+        // Living houses grow the population over time. Settlers consume
+        // food (bread, fish, meat) from the player's stock; the population
+        // only grows when there is a food surplus and shrinks when food
+        // runs out (like settlers-remake, where settlers need food to
+        // survive and living houses spawn new settlers).
         if (Tick % 600 == 0)
         {
-            foreach (var building in Buildings)
+            foreach (var player in Players)
             {
-                if (building.State != BuildingState.Active || !building.Definition.IsLivinghouse)
+                if (player.Population <= 0)
                     continue;
 
-                var player = GetPlayer(building.Player);
-                if (player == null)
-                    continue;
+                // Each settler eats one unit of food. The food types are
+                // tried in order (bread, fish, meat).
+                bool fed = false;
+                foreach (var food in FoodMaterials)
+                {
+                    if (player.Inventory.Get(food) > 0)
+                    {
+                        player.Inventory.Remove(food);
+                        fed = true;
+                        break;
+                    }
+                }
 
-                player.Population++;
-                player.FreeSettlers++;
+                if (!fed)
+                {
+                    // No food: one settler starves.
+                    player.Population = Math.Max(0, player.Population - 1);
+                    player.FreeSettlers = Math.Max(0, player.FreeSettlers - 1);
+                    continue;
+                }
+
+                // With food, the living houses spawn new settlers up to
+                // their total capacity.
+                int capacity = 0;
+                foreach (var building in Buildings)
+                {
+                    if (building.Player != player.Index)
+                        continue;
+                    if (building.State != BuildingState.Active || !building.Definition.IsLivinghouse)
+                        continue;
+                    capacity += building.Definition.LivingCapacity;
+                }
+
+                if (player.Population < capacity)
+                {
+                    player.Population++;
+                    player.FreeSettlers++;
+                }
             }
         }
 

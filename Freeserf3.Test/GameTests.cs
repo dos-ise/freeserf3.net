@@ -743,6 +743,89 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void PopulationDoesNotGrowWithoutFood()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Remove all food: the settlers starve instead of growing.
+        var player = game.GetPlayer(0)!;
+        player.Inventory.Set(Material.Bread, 0);
+        player.Inventory.Set(Material.Fish, 0);
+        player.Inventory.Set(Material.Meat, 0);
+
+        var house = game.PlaceBuilding(BuildingType.SmallLivinghouse, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, house.State);
+
+        int before = player.Population;
+        for (int i = 0; i < 600; i++)
+            game.TickOnce();
+
+        // Without food the population shrinks by one.
+        Assert.AreEqual(before - 1, player.Population);
+        Assert.AreEqual(before - 1, player.FreeSettlers);
+    }
+
+    [TestMethod]
+    public void PopulationConsumesFood()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var player = game.GetPlayer(0)!;
+        int breadBefore = player.Inventory.Get(Material.Bread);
+
+        var house = game.PlaceBuilding(BuildingType.SmallLivinghouse, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, house.State);
+
+        for (int i = 0; i < 600; i++)
+            game.TickOnce();
+
+        // One settler ate one bread.
+        Assert.AreEqual(breadBefore - 1, player.Inventory.Get(Material.Bread));
+    }
+
+    [TestMethod]
+    public void PopulationLimitedByLivingCapacity()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Plenty of food so growth is only limited by the house capacity.
+        var player = game.GetPlayer(0)!;
+        player.Inventory.Set(Material.Bread, 1000);
+        player.Inventory.Set(Material.Fish, 1000);
+        player.Inventory.Set(Material.Meat, 1000);
+
+        var house = game.PlaceBuilding(BuildingType.SmallLivinghouse, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, house.State);
+
+        // A small living house holds 10 settlers. Grow well beyond that.
+        for (int i = 0; i < 600 * 20; i++)
+            game.TickOnce();
+
+        Assert.AreEqual(10, player.Population);
+    }
+
+    [TestMethod]
     public void WinConditionReached()
     {
         var map = new Map(8);

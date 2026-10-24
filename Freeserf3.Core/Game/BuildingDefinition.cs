@@ -35,7 +35,8 @@ public sealed class BuildingDefinition
         int productionTime = DefaultProductionTime,
         int soldierCapacity = 0,
         int viewDistance = 0,
-        Material? tool = null)
+        Material? tool = null,
+        int livingCapacity = 0)
     {
         Type = type;
         Worker = worker;
@@ -51,6 +52,7 @@ public sealed class BuildingDefinition
         SoldierCapacity = soldierCapacity;
         ViewDistance = viewDistance;
         Tool = tool;
+        LivingCapacity = livingCapacity;
     }
 
     public BuildingType Type { get; }
@@ -70,6 +72,12 @@ public sealed class BuildingDefinition
     /// assigned.
     /// </summary>
     public Material? Tool { get; }
+
+    /// <summary>
+    /// Number of settlers a living house can hold (like settlers-remake
+    /// SpawnBuilding PRODUCE_LIMIT). Only used by living houses.
+    /// </summary>
+    public int LivingCapacity { get; }
 
     /// <summary>
     /// Whether the building gathers a map resource (trees, stones) instead
@@ -294,13 +302,13 @@ public sealed class BuildingDefinition
 
         // --- Living houses ---
         Add(new BuildingDefinition(BuildingType.SmallLivinghouse, WorkerType.None,
-            new[] { (Material.Plank, 2), (Material.Stone, 3) }, isLivinghouse: true));
+            new[] { (Material.Plank, 2), (Material.Stone, 3) }, isLivinghouse: true, livingCapacity: 10));
 
         Add(new BuildingDefinition(BuildingType.MediumLivinghouse, WorkerType.None,
-            new[] { (Material.Plank, 5), (Material.Stone, 8) }, isLivinghouse: true));
+            new[] { (Material.Plank, 5), (Material.Stone, 8) }, isLivinghouse: true, livingCapacity: 30));
 
         Add(new BuildingDefinition(BuildingType.BigLivinghouse, WorkerType.None,
-            new[] { (Material.Plank, 15), (Material.Stone, 24) }, isLivinghouse: true));
+            new[] { (Material.Plank, 15), (Material.Stone, 24) }, isLivinghouse: true, livingCapacity: 100));
 
         // --- Military buildings ---
         Add(new BuildingDefinition(BuildingType.LookoutTower, WorkerType.None,
