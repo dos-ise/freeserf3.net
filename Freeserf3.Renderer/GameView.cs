@@ -892,11 +892,11 @@ public sealed class GameView : IDisposable
         {
             foreach (var building in game.Buildings)
             {
-                if (building.Position == pos)
+                if (IsInBuildingFootprint(building, pos))
                 {
-                    selected = pos;
+                    selected = building.Position;
                     controlPanel.SelectedMapBuilding = building;
-                    log($"Selected {building.Type} at {pos} ({building.State})");
+                    log($"Selected {building.Type} at {building.Position} ({building.State})");
                     return;
                 }
             }
@@ -904,14 +904,31 @@ public sealed class GameView : IDisposable
 
         foreach (var building in gameMap!.Buildings)
         {
-            if (building.PosX == pos.X && building.PosY == pos.Y)
+            var type = BuildingTypeFromMap(building.BuildingType);
+            if (type.HasValue && IsInBuildingFootprint(type.Value, new Position(building.PosX, building.PosY), pos))
             {
-                selected = pos;
-                var type = BuildingTypeFromMap(building.BuildingType);
-                log($"Selected {(type?.ToString() ?? "building")} at {pos}");
+                selected = new Position(building.PosX, building.PosY);
+                log($"Selected {(type?.ToString() ?? "building")} at ({building.PosX},{building.PosY})");
                 return;
             }
         }
+    }
+
+    /// <summary>Whether the position lies within the building's footprint.</summary>
+    static bool IsInBuildingFootprint(Building building, Position pos)
+    {
+        return IsInBuildingFootprint(building.Type, building.Position, pos);
+    }
+
+    /// <summary>Whether the position lies within the building's footprint.</summary>
+    static bool IsInBuildingFootprint(BuildingType type, Position building, Position pos)
+    {
+        foreach (var (dx, dy) in BuildingFootprints.For(type))
+        {
+            if (building.X + dx == pos.X && building.Y + dy == pos.Y)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -924,7 +941,7 @@ public sealed class GameView : IDisposable
         if (game == null || selected is not Position pos)
             return false;
 
-        var building = game.Buildings.FirstOrDefault(b => b.Position == pos);
+        var building = game.Buildings.FirstOrDefault(b => IsInBuildingFootprint(b, pos));
         if (building == null || building.Type != BuildingType.Toolsmith)
             return false;
 
@@ -945,7 +962,7 @@ public sealed class GameView : IDisposable
         if (game == null || selected is not Position pos)
             return false;
 
-        var building = game.Buildings.FirstOrDefault(b => b.Position == pos);
+        var building = game.Buildings.FirstOrDefault(b => IsInBuildingFootprint(b, pos));
         if (building == null || building.State == BuildingState.Destroyed)
             return false;
 

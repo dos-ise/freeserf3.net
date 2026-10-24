@@ -70,7 +70,11 @@ public sealed class MainWindow : IDisposable
         input.Mice[0].Scroll += OnScroll;
         input.Keyboards[0].KeyDown += OnKeyDown;
 
-        gameView = new GameView(gameData, Console.WriteLine);
+        gameView = new GameView(gameData, msg =>
+        {
+            Console.WriteLine(msg);
+            try { System.IO.File.AppendAllText(@"C:\git\copilot-worktrees\freeserf3.net\dos-ise-studious-eureka\game.log", msg + Environment.NewLine); } catch { }
+        });
         gameView.ExitRequested += () => window.Close();
         soundPlayer = new WindowsSoundPlayer();
         gameView.SetSoundPlayer(soundPlayer);
