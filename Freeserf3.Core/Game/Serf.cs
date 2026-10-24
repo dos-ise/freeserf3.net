@@ -170,6 +170,11 @@ public sealed class Serf : Movable
     /// <summary>Ticks since the soldier's last attack.</summary>
     public int AttackTicks { get; set; }
 
+    /// <summary>
+    /// Ticks spent in the attack animation (drives the ACTION1 frames).
+    /// </summary>
+    public int AttackAnimationTicks { get; set; }
+
     /// <summary>The soldier's remaining health.</summary>
     public float Health { get; set; } = 100f;
 

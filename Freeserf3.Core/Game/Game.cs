@@ -1393,6 +1393,7 @@ public sealed class Game
                 int buildingDistance = MapGeometry.GetDistance(soldier.Position, buildingTarget.Position);
                 if (buildingDistance <= 3)
                 {
+                    soldier.AttackAnimationTicks++;
                     soldier.AttackTicks++;
                     if (soldier.AttackTicks >= SoldierAttackInterval)
                     {
@@ -1437,6 +1438,7 @@ public sealed class Game
             if (distance <= stats.Radius)
             {
                 // In attack range: hit the enemy every few ticks.
+                soldier.AttackAnimationTicks++;
                 soldier.AttackTicks++;
                 if (soldier.AttackTicks >= SoldierAttackInterval)
                 {

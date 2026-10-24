@@ -690,7 +690,14 @@ public sealed class GameView : IDisposable
                 if (settler.Type == SerfType.Collector)
                     gameObjects.AddCarrier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.CarriedGood, settler.Facing, idle, screenPos);
                 else if (settler.Type == SerfType.Soldier)
-                    gameObjects.AddSoldier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Weapon, settler.Facing, idle, screenPos);
+                {
+                    bool attacking = settler.SoldierState == SoldierState.Attacking
+                        && (settler.AttackTarget != null || settler.AttackBuilding != null);
+                    if (attacking)
+                        gameObjects.AddSoldierAttacking(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, settler.AttackAnimationTicks / 5, settler.Weapon, settler.Facing, screenPos);
+                    else
+                        gameObjects.AddSoldier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Weapon, settler.Facing, idle, screenPos);
+                }
                 else if (settler.Type == SerfType.Builder)
                     gameObjects.AddBuilderMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, settler.BuilderState == BuilderState.Building, idle, screenPos);
                 else if (settler.Type == SerfType.ResourceWorker)

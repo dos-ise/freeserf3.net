@@ -139,6 +139,19 @@ public sealed class GameObjectRenderer : IDisposable
         [Material.Bow] = 21
     };
 
+    /// <summary>
+    /// Soldier attack (ACTION1) sequences per weapon in the soldier file
+    /// (from settlers-remake movables-ROMAN.txt): swordsman = 12, pikeman
+    /// = 18, bowman = 24. The bowman sequence has 24 frames per direction,
+    /// the others 12.
+    /// </summary>
+    public static readonly Dictionary<Material, int> SoldierAttackSequences = new()
+    {
+        [Material.Sword] = 12,
+        [Material.Spear] = 18,
+        [Material.Bow] = 24
+    };
+
     /// <summary>Stack sprite sequence per material in the objects file (from settlers-remake EMaterialType).</summary>
     public static readonly Dictionary<Material, int> StackSequences = new()
     {
@@ -379,6 +392,29 @@ public sealed class GameObjectRenderer : IDisposable
         // Soldier walking sequences (swordsman, pikeman, bowman) from the
         // soldier file (dat 12).
         foreach (int sequence in SoldierSequences.Values.Distinct())
+        {
+            var frames = soldiers.GetSettlerSequence(sequence);
+            if (frames.Length == 0)
+                continue;
+
+            var torsos = soldiers.GetSettlerTorsoSequence(sequence);
+            var shadows = soldiers.GetSettlerShadowSequence(sequence);
+
+            foreach (int color in colors)
+            {
+                var images = new SpriteImage[frames.Length];
+                for (int i = 0; i < frames.Length; i++)
+                {
+                    var torso = i < torsos.Length ? torsos[i] : null;
+                    var shadow = i < shadows.Length ? shadows[i] : null;
+                    images[i] = AddToAtlas(CombineSettler(frames[i], torso, shadow, PlayerColors[color]));
+                }
+                settlerImages[(color, sequence)] = images;
+            }
+        }
+
+        // Soldier attack sequences (ACTION1) from the soldier file (dat 12).
+        foreach (int sequence in SoldierAttackSequences.Values.Distinct())
         {
             var frames = soldiers.GetSettlerSequence(sequence);
             if (frames.Length == 0)
@@ -798,6 +834,23 @@ public sealed class GameObjectRenderer : IDisposable
             return;
 
         AddSprite(frames[DirectionFrameIndex(direction, frame, idle)], pos, height, 0.5f, visibleOnly: true, screenPos);
+    }
+
+    /// <summary>
+    /// Adds a soldier sprite in the attack (ACTION1) animation. The attack
+    /// sequence depends on the weapon; the bowman has 24 frames per
+    /// direction, the others 12.
+    /// </summary>
+    public void AddSoldierAttacking(Position pos, int height, int playerColor, int frame, Material weapon, Direction direction = Direction.SouthWest, (float X, float Y)? screenPos = null)
+    {
+        int sequence = SoldierAttackSequences.TryGetValue(weapon, out int s) ? s : 12;
+        if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
+            return;
+
+        int framesPerDirection = frames.Length >= 144 ? 24 : 12;
+        int offset = ((int)direction + 3) % 6 * framesPerDirection;
+        int index = offset + (frame % framesPerDirection);
+        AddSprite(frames[index], pos, height, 0.5f, visibleOnly: true, screenPos);
     }
 
     /// <summary>
