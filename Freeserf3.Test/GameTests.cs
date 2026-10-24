@@ -561,6 +561,123 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void CanPlaceMineOnMountain()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        // A mountain cell.
+        var cell = map.GetCell(5, 5);
+        cell.Landscape = 32; // Mountain
+        map.SetCell(5, 5, cell);
+
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        Assert.IsTrue(game.CanPlaceBuilding(BuildingType.Coalmine, new Position(5, 5), 0));
+        Assert.IsFalse(game.CanPlaceBuilding(BuildingType.Coalmine, new Position(3, 3), 0));
+    }
+
+    [TestMethod]
+    public void CanPlaceMineNearOre()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        // An iron deposit near the position.
+        var orePos = new Position(6, 6);
+        var cell = map.GetCell(orePos);
+        cell.ResourceType1 = 2; // iron
+        cell.ResourceType2 = 5;
+        map.SetCell(orePos, cell);
+
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        Assert.IsTrue(game.CanPlaceBuilding(BuildingType.Ironmine, new Position(4, 4), 0));
+        Assert.IsFalse(game.CanPlaceBuilding(BuildingType.Coalmine, new Position(4, 4), 0));
+    }
+
+    [TestMethod]
+    public void CanPlaceFarmOnlyOnFertileGround()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // On grass (fertile) the farm can be placed.
+        Assert.IsTrue(game.CanPlaceBuilding(BuildingType.Farm, new Position(4, 4), 0));
+
+        // On water it cannot.
+        var waterPos = new Position(8, 8);
+        var cell = map.GetCell(waterPos);
+        cell.Landscape = 0; // Water1
+        map.SetCell(waterPos, cell);
+        Assert.IsFalse(game.CanPlaceBuilding(BuildingType.Farm, waterPos, 0));
+    }
+
+    [TestMethod]
+    public void CanPlaceFisherOnlyNearWater()
+    {
+        var map = new Map(64);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        // Water only in the far right corner, outside the fisher's work
+        // radius (30) from the left side.
+        for (int y = 0; y < 64; y++)
+        {
+            for (int x = 0; x < 64; x++)
+            {
+                if (x >= 60)
+                {
+                    var cell = map.GetCell(x, y);
+                    cell.Landscape = 0; // Water1
+                    map.SetCell(x, y, cell);
+                }
+            }
+        }
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // No water within the work radius of (4,4): cannot place.
+        Assert.IsFalse(game.CanPlaceBuilding(BuildingType.Fisher, new Position(4, 4), 0));
+
+        // Near the water edge it can be placed.
+        Assert.IsTrue(game.CanPlaceBuilding(BuildingType.Fisher, new Position(58, 4), 0));
+    }
+
+    [TestMethod]
+    public void CanPlaceLivinghouseOnlyOnOwnTerritory()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Without a military building the territory is unclaimed (0), so
+        // the living house cannot be placed.
+        Assert.IsFalse(game.CanPlaceBuilding(BuildingType.SmallLivinghouse, new Position(4, 4), 0));
+
+        // A tower claims the territory around it.
+        var tower = game.PlaceBuilding(BuildingType.Tower, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, tower.State);
+        game.RecomputeTerritory();
+
+        // The living house is placed next to the tower, on claimed ground.
+        Assert.IsTrue(game.CanPlaceBuilding(BuildingType.SmallLivinghouse, new Position(6, 4), 0));
+    }
+
+    [TestMethod]
     public void ForesterPlantsTree()
     {
         var map = new Map(12);

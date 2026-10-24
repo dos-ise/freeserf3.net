@@ -93,7 +93,7 @@ public sealed class Game
     /// </summary>
     public const int AttackRadius = 40;
 
-    /// <summary>Per-cell territory owner (index = y * Size + x), 0 = no owner.</summary>
+    /// <summary>Per-cell territory owner (index = y * Size + x), 255 = no owner.</summary>
     byte[] territory = Array.Empty<byte>();
 
     /// <summary>
@@ -415,6 +415,99 @@ public sealed class Game
     }
 
     /// <summary>
+    /// Whether a building of the given type can be placed at the position:
+    /// in bounds, walkable and on suitable terrain. Mines need a mountain
+    /// or an ore deposit nearby, farms need fertile ground, fishers need
+    /// water and living houses need the player's own territory (like
+    /// settlers-remake construction position finders).
+    /// </summary>
+    public bool CanPlaceBuilding(BuildingType type, Position position, int playerIndex)
+    {
+        if (!Map.IsInBounds(position))
+            return false;
+        if (!IsWalkable(Map, position))
+            return false;
+
+        var definition = BuildingDefinition.Get(type);
+
+        // Mines must stand on a mountain or next to an ore deposit.
+        if (definition.IsMine)
+        {
+            var landscape = LandscapeMapping.FromMapValue(Map.GetCell(position).Landscape);
+            if (landscape == LandscapeType.Mountain)
+                return true;
+            return HasMineResourceNearby(type, position);
+        }
+
+        // Farms need fertile ground in their work area.
+        if (type == BuildingType.Farm)
+            return HasWorkAreaResource(position, definition.WorkRadius, IsFertile);
+
+        // Fishers need water in their work area.
+        if (type == BuildingType.Fisher)
+            return HasWorkAreaResource(position, definition.WorkRadius, IsWater);
+
+        // Living houses need the player's own territory.
+        if (definition.IsLivinghouse)
+            return IsTerritoryOwnedBy(position, playerIndex);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether there is an ore deposit of the mine's type within a small
+    /// radius of the position (used when the mine is not directly on a
+    /// mountain).
+    /// </summary>
+    bool HasMineResourceNearby(BuildingType type, Position position)
+    {
+        int resourceType = type switch
+        {
+            BuildingType.Coalmine => 1,
+            BuildingType.Ironmine => 2,
+            BuildingType.Goldmine => 3,
+            BuildingType.Gemsmine => 4,
+            BuildingType.Sulfurmine => 5,
+            _ => 0
+        };
+        if (resourceType == 0)
+            return false;
+
+        foreach (var (pos, amount) in MapResources)
+        {
+            if (amount <= 0)
+                continue;
+            if (Map.GetCell(pos).ResourceType1 != resourceType)
+                continue;
+            if (MapGeometry.GetDistance(position, pos) <= 3)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Whether there is a cell matching the given predicate within the
+    /// radius around the position.
+    /// </summary>
+    bool HasWorkAreaResource(Position position, int radius, Func<Position, bool> predicate)
+    {
+        for (int dy = -radius; dy <= radius; dy++)
+        {
+            for (int dx = -radius; dx <= radius; dx++)
+            {
+                var pos = new Position(position.X + dx, position.Y + dy);
+                if (!Map.IsInBounds(pos))
+                    continue;
+                if (MapGeometry.GetDistance(position, pos) > radius)
+                    continue;
+                if (predicate(pos))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Whether the cell is occupied by a building footprint. Buildings
     /// block movement so carriers and settlers walk around them.
     /// </summary>
@@ -716,6 +809,7 @@ public sealed class Game
     {
         int size = Map.Size;
         territory = new byte[size * size];
+        Array.Fill(territory, (byte)255); // 255 = no owner
         if (Players.Count == 0)
             return;
 
@@ -842,7 +936,20 @@ public sealed class Game
     {
         if (!Map.IsInBounds(pos))
             return 0;
-        return territory[pos.Y * Map.Size + pos.X];
+        byte owner = territory[pos.Y * Map.Size + pos.X];
+        return owner == 255 ? (byte)0 : owner;
+    }
+
+    /// <summary>
+    /// Whether the territory at the given position is claimed by the given
+    /// player. Unlike <see cref="GetTerritoryPlayer"/> this distinguishes
+    /// "no owner" (255) from player 0.
+    /// </summary>
+    public bool IsTerritoryOwnedBy(Position pos, int player)
+    {
+        if (!Map.IsInBounds(pos))
+            return false;
+        return territory[pos.Y * Map.Size + pos.X] == player;
     }
 
     /// <summary>

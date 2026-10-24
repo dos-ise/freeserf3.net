@@ -910,15 +910,15 @@ public sealed class GameView : IDisposable
 
     /// <summary>
     /// Whether a building can be placed at the given position: in bounds,
-    /// not on water and not inside an existing building footprint.
+    /// walkable and on suitable terrain for the building type (mines on
+    /// mountains, farms on fertile ground, fishers near water, living
+    /// houses on own territory).
     /// </summary>
     bool CanPlaceBuilding(Position pos)
     {
         if (gameMap == null || game == null)
             return false;
-        if (!gameMap.IsInBounds(pos))
-            return false;
-        return game.IsWalkable(gameMap, pos);
+        return game.CanPlaceBuilding(buildType, pos, 0);
     }
 
     /// <summary>Places a road cell at the given position.</summary>
