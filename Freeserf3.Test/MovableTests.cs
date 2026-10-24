@@ -23,7 +23,10 @@ public class MovableTests
     [TestMethod]
     public void SerfWalksAlongPath()
     {
-        var serf = new Serf(0, new Position(0, 0), SerfType.Carrier);
+        var serf = new Serf(0, new Position(0, 0), SerfType.Carrier)
+        {
+            MoveInterval = 1
+        };
         var path = new List<Position>
         {
             new(1, 0),
@@ -64,7 +67,10 @@ public class MovableTests
     [TestMethod]
     public void SetPathAcceptsStartExclusivePath()
     {
-        var serf = new Serf(0, new Position(0, 0), SerfType.Carrier);
+        var serf = new Serf(0, new Position(0, 0), SerfType.Carrier)
+        {
+            MoveInterval = 1
+        };
         var path = new List<Position> { new(1, 0), new(2, 0) };
 
         serf.SetPath(path);

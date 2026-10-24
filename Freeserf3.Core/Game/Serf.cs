@@ -152,8 +152,15 @@ public sealed class Serf : Movable
     /// <summary>Whether the settler carries a good.</summary>
     public bool IsCarrying => CarriedGood.HasValue;
 
+    /// <summary>
+    /// Ticks per map cell walked (1 = one cell per tick). The default
+    /// matches the original game's walking speed (~0.4s per cell at
+    /// 60 ticks/sec).
+    /// </summary>
+    public const int DefaultMoveInterval = 25;
+
     /// <summary>Ticks per map cell walked (1 = one cell per tick).</summary>
-    public int MoveInterval { get; set; } = 1;
+    public int MoveInterval { get; set; } = DefaultMoveInterval;
 
     /// <summary>Ticks spent idle (used by the game to pause between walks).</summary>
     public int IdleTicks { get; set; }

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GameTests.cs - Tests for the game state and tick loop
  */
 
@@ -171,7 +171,7 @@ public class GameTests : DataTestBase
 
         // The materials are delivered by the carrier and built by the
         // builder over time.
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
 
         Assert.AreEqual(BuildingState.Active, building.State);
@@ -193,7 +193,7 @@ public class GameTests : DataTestBase
 
         // No free settlers: no builder is assigned and nothing is built.
         var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
-        for (int i = 0; i < 100; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
 
         Assert.AreEqual(BuildingState.ConstructionSite, building.State);
@@ -211,7 +211,7 @@ public class GameTests : DataTestBase
         game.StartGame();
 
         var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
 
         Assert.AreEqual(BuildingState.Active, building.State);
@@ -234,7 +234,7 @@ public class GameTests : DataTestBase
         player.Inventory.Set(Material.Axe, 0);
 
         var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
 
         Assert.AreEqual(BuildingState.Active, building.State);
@@ -257,7 +257,7 @@ public class GameTests : DataTestBase
         player.Inventory.Set(Material.Axe, 0);
 
         var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.IsFalse(building.HasWorker);
 
@@ -282,7 +282,7 @@ public class GameTests : DataTestBase
         game.StartGame();
 
         var toolsmith = game.PlaceBuilding(BuildingType.Toolsmith, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, toolsmith.State);
         Assert.IsTrue(toolsmith.HasWorker);
@@ -298,7 +298,7 @@ public class GameTests : DataTestBase
         // at the flag). The player starts with 6 saws.
         int sawsBefore = game.GetPlayer(0)!.Inventory.Get(Material.Saw);
         int productionTime = toolsmith.Definition.ProductionTime;
-        for (int i = 0; i < productionTime + 200; i++)
+        for (int i = 0; i < productionTime + 500; i++)
             game.TickOnce();
 
         Assert.AreEqual(0, toolsmith.Output.Get(Material.Hammer));
@@ -507,7 +507,7 @@ public class GameTests : DataTestBase
         game.StartGame();
 
         var farm = game.PlaceBuilding(BuildingType.Farm, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, farm.State);
 
@@ -668,7 +668,7 @@ public class GameTests : DataTestBase
 
         // A tower claims the territory around it.
         var tower = game.PlaceBuilding(BuildingType.Tower, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, tower.State);
         game.RecomputeTerritory();
@@ -695,7 +695,7 @@ public class GameTests : DataTestBase
         // Build a lumberjack (2 stone + 2 plank) and let it become active
         // with a worker.
         var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, building.State);
         Assert.IsTrue(building.HasWorker);
@@ -726,7 +726,7 @@ public class GameTests : DataTestBase
         game.StartGame();
 
         var tower = game.PlaceBuilding(BuildingType.Tower, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, tower.State);
         Assert.IsTrue(tower.Soldiers.Count > 0);
@@ -753,7 +753,7 @@ public class GameTests : DataTestBase
         game.StartGame();
 
         var tower = game.PlaceBuilding(BuildingType.Tower, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, tower.State);
 
@@ -778,7 +778,7 @@ public class GameTests : DataTestBase
         game.StartGame();
 
         var tower = game.PlaceBuilding(BuildingType.Tower, new Position(8, 8), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, tower.State);
         Assert.IsTrue(tower.Soldiers.Count > 0);
@@ -853,7 +853,7 @@ public class GameTests : DataTestBase
 
         // Sawmill: 3 plank + 4 stone, trunk -> plank.
         var building = game.PlaceBuilding(BuildingType.Sawmill, new Position(4, 4), 0);
-        for (int i = 0; i < 1000; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
 
         Assert.AreEqual(BuildingState.Active, building.State);
@@ -864,7 +864,7 @@ public class GameTests : DataTestBase
         int productionTime = building.Definition.ProductionTime;
         // Production plus time for the carrier to deliver the plank to the
         // player's stock.
-        for (int i = 0; i < productionTime + 100; i++)
+        for (int i = 0; i < productionTime + 500; i++)
             game.TickOnce();
 
         Assert.AreEqual(0, building.Output.Get(Material.Plank));
@@ -976,7 +976,10 @@ public class GameTests : DataTestBase
         var game = new Game(map, 42);
         game.StartGame();
 
-        var serf = new Serf(0, new Position(2, 2), SerfType.Carrier);
+        var serf = new Serf(0, new Position(2, 2), SerfType.Carrier)
+        {
+            MoveInterval = 1
+        };
         // Walk east: (2,2) -> (3,2) -> (4,2).
         serf.SetPath(new List<Position> { new(3, 2), new(4, 2) });
         serf.Tick();
@@ -1108,7 +1111,7 @@ public class GameTests : DataTestBase
         Assert.AreEqual(6, game.Stacks[0].Count); // stack not yet touched
 
         // Let the collector walk to the stack, pick up and carry to stock.
-        for (int i = 0; i < 200; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
 
         // The stack lost goods and the player's stock gained them.
@@ -1132,7 +1135,7 @@ public class GameTests : DataTestBase
         Assert.AreEqual(MovableState.Idle, settler.State);
 
         // Free settlers stand still; they do not wander randomly.
-        for (int i = 0; i < 100; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
 
         Assert.AreEqual(MovableState.Idle, settler.State);
@@ -1150,7 +1153,7 @@ public class GameTests : DataTestBase
         game.StartGame();
 
         var house = game.PlaceBuilding(BuildingType.SmallLivinghouse, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
 
         Assert.AreEqual(BuildingState.Active, house.State);
@@ -1170,6 +1173,8 @@ public class GameTests : DataTestBase
         var map = new Map(8);
         map.Players.Add(new MapPlayerInfo { Name = "P0" });
         map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 3, PosY = 1 });
         SetGrass(map);
         var game = new Game(map, 42);
         game.StartGame();
@@ -1181,9 +1186,18 @@ public class GameTests : DataTestBase
         player.Inventory.Set(Material.Meat, 0);
 
         var house = game.PlaceBuilding(BuildingType.SmallLivinghouse, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        int ticks = 0;
+        while (house.State != BuildingState.Active && ticks < 3000)
+        {
             game.TickOnce();
+            ticks++;
+        }
         Assert.AreEqual(BuildingState.Active, house.State);
+
+        // Align to the next 600-tick food cycle boundary, then measure one
+        // full cycle.
+        while (game.Tick % 600 != 0)
+            game.TickOnce();
 
         int before = player.Population;
         for (int i = 0; i < 600; i++)
@@ -1205,13 +1219,15 @@ public class GameTests : DataTestBase
         game.StartGame();
 
         var player = game.GetPlayer(0)!;
-        int breadBefore = player.Inventory.Get(Material.Bread);
 
         var house = game.PlaceBuilding(BuildingType.SmallLivinghouse, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, house.State);
 
+        // Measure the bread stock after the house is active, then one
+        // 600-tick food cycle consumes exactly one bread.
+        int breadBefore = player.Inventory.Get(Material.Bread);
         for (int i = 0; i < 600; i++)
             game.TickOnce();
 
@@ -1236,7 +1252,7 @@ public class GameTests : DataTestBase
         player.Inventory.Set(Material.Meat, 1000);
 
         var house = game.PlaceBuilding(BuildingType.SmallLivinghouse, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, house.State);
 
@@ -1262,7 +1278,7 @@ public class GameTests : DataTestBase
 
         // Build enough living houses to grow the population to the target.
         var house = game.PlaceBuilding(BuildingType.SmallLivinghouse, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
 
         for (int i = 0; i < 600 * 5; i++)
@@ -1300,7 +1316,7 @@ public class GameTests : DataTestBase
 
         // Build a sawmill and let it become active.
         var sawmill = game.PlaceBuilding(BuildingType.Sawmill, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, sawmill.State);
         sawmill.AssignWorker(WorkerType.Sawmiller);
@@ -1337,7 +1353,7 @@ public class GameTests : DataTestBase
         // Build a tower and let it become active. Soldiers are recruited
         // as soon as the tower is active.
         var tower = game.PlaceBuilding(BuildingType.Tower, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, tower.State);
 
@@ -1366,7 +1382,7 @@ public class GameTests : DataTestBase
 
         // Build a tower and let it become active.
         var tower = game.PlaceBuilding(BuildingType.Tower, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, tower.State);
 
@@ -1390,7 +1406,7 @@ public class GameTests : DataTestBase
 
         // Build a tower, let it become active and recruit a soldier.
         var tower = game.PlaceBuilding(BuildingType.Tower, new Position(4, 4), 0);
-        for (int i = 0; i < 500; i++)
+        for (int i = 0; i < 3000; i++)
             game.TickOnce();
         Assert.AreEqual(BuildingState.Active, tower.State);
         Assert.AreEqual(1, tower.Soldiers.Count);

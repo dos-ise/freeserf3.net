@@ -149,7 +149,7 @@ public sealed class Game
 
             var serf = new Serf(mapSettler.Party, position, SerfType.Worker)
             {
-                MoveInterval = 4
+                MoveInterval = Serf.DefaultMoveInterval
             };
             Settlers.Add(serf);
         }
@@ -262,7 +262,7 @@ public sealed class Game
             building.Flag = flag;
 
             if (network.StockFlag != null)
-                network.Connect(flag, network.StockFlag, playerIndex, IsWalkable);
+                network.Connect(network.StockFlag, flag, playerIndex, IsWalkable);
         }
 
         var player = GetPlayer(playerIndex);
@@ -400,7 +400,7 @@ public sealed class Game
                 building.Flag = flag;
 
                 if (network.StockFlag != null)
-                    network.Connect(flag, network.StockFlag, mapBuilding.Party, IsWalkable);
+                    network.Connect(network.StockFlag, flag, mapBuilding.Party, IsWalkable);
             }
 
             // The soldiers the map file lists for this building. They are
@@ -415,7 +415,7 @@ public sealed class Game
                     Barracks = building,
                     Weapon = Material.Sword,
                     SoldierState = SoldierState.Idle,
-                    MoveInterval = 4
+                    MoveInterval = Serf.DefaultMoveInterval
                 };
                 building.Soldiers.Add(soldier);
                 Settlers.Add(soldier);
@@ -1077,7 +1077,7 @@ public sealed class Game
                 Barracks = building,
                 Weapon = weapon,
                 SoldierState = SoldierState.Idle,
-                MoveInterval = 4
+                MoveInterval = Serf.DefaultMoveInterval
             };
             building.Soldiers.Add(soldier);
             Settlers.Add(soldier);
@@ -1324,7 +1324,7 @@ public sealed class Game
         {
             ConstructionSite = building,
             BuilderState = BuilderState.Building,
-            MoveInterval = 4
+            MoveInterval = Serf.DefaultMoveInterval
         };
         Settlers.Add(builder);
         Builders.Add(builder);
@@ -1399,7 +1399,7 @@ public sealed class Game
             Workplace = building,
             Profession = building.Definition.Worker,
             ResourceState = ResourceWorkerState.LookingForResource,
-            MoveInterval = 4
+            MoveInterval = Serf.DefaultMoveInterval
         };
         Settlers.Add(worker);
         ResourceWorkers.Add(worker);

@@ -60,9 +60,9 @@ public class TransportTests
         Assert.IsTrue(road.IsCarrying);
         Assert.AreEqual(new Position(0, 0), road.Carrier.Position);
 
-        // 16 more ticks to walk the 4 path cells (4 ticks per cell) and
-        // drop at the end flag.
-        for (int i = 0; i < 16; i++)
+        // Walk the 4 path cells (MoveInterval ticks per cell) and drop at
+        // the end flag.
+        for (int i = 0; i < 4 * Serf.DefaultMoveInterval; i++)
             road.Tick();
 
         Assert.IsFalse(road.IsCarrying);
@@ -79,9 +79,9 @@ public class TransportTests
 
         start.AddGood(Material.Plank);
 
-        // Pick up (1) and walk to the end (2 cells x 4 ticks = 8).
+        // Pick up (1) and walk to the end (2 cells x MoveInterval).
         road.Tick();
-        for (int i = 0; i < 8; i++)
+        for (int i = 0; i < 2 * Serf.DefaultMoveInterval; i++)
             road.Tick();
         Assert.AreEqual(1, end.Count);
         Assert.AreEqual(Material.Plank, end.TakeGood());
@@ -95,9 +95,9 @@ public class TransportTests
         Assert.AreEqual(CarrierState.IdleAtEnd, road.CarrierState);
 
         // A good at the start makes the carrier walk back to pick it up
-        // (1 tick to turn around + 2 cells x 4 ticks = 9).
+        // (1 tick to turn around + 2 cells x MoveInterval).
         start.AddGood(Material.Stone);
-        for (int i = 0; i < 9; i++)
+        for (int i = 0; i < 1 + 2 * Serf.DefaultMoveInterval; i++)
             road.Tick();
         Assert.AreEqual(new Position(0, 0), road.Carrier.Position);
         Assert.AreEqual(CarrierState.IdleAtStart, road.CarrierState);
@@ -151,8 +151,8 @@ public class TransportTests
 
         flagA.AddGood(Material.Trunk);
 
-        // Pick up (1) + walk 3 cells x 4 ticks = 13 ticks.
-        for (int i = 0; i < 13; i++)
+        // Pick up (1) + walk 3 cells x MoveInterval.
+        for (int i = 0; i < 1 + 3 * Serf.DefaultMoveInterval; i++)
             network.Tick();
 
         Assert.AreEqual(1, flagB.Count);

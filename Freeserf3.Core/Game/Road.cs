@@ -42,14 +42,14 @@ public sealed class Road
         Path = path;
         Carrier = new Serf(player, start.Position, SerfType.Carrier)
         {
-            MoveInterval = 4
+            MoveInterval = Serf.DefaultMoveInterval
         };
         CarrierState = CarrierState.IdleAtStart;
         CarrierPathIndex = 0;
     }
 
     /// <summary>Ticks per map cell walked by the carrier (same as walking settlers).</summary>
-    public int MoveInterval { get; set; } = 4;
+    public int MoveInterval { get; set; } = Serf.DefaultMoveInterval;
 
     /// <summary>Ticks spent on the current road cell.</summary>
     int moveCounter;
