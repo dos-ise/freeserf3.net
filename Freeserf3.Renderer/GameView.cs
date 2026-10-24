@@ -237,6 +237,9 @@ public sealed class GameView : IDisposable
         controlPanel = new ControlPanel(State.Gl);
         controlPanel.Load(gameData);
         controlPanel.BuildingSelected += OnBuildingSelected;
+        controlPanel.DemolishRequested += OnDemolishRequested;
+        controlPanel.ToolsmithOutputRequested += OnToolsmithOutputRequested;
+        controlPanel.SoldierRequested += OnSoldierRequested;
         controlPanel.SystemButtonClicked += OnSystemButtonClicked;
         controlPanel.PauseRequested += OnPauseRequested;
         controlPanel.MusicRequested += OnMusicRequested;
@@ -1156,12 +1159,54 @@ public sealed class GameView : IDisposable
         if (building == null || building.State == BuildingState.Destroyed)
             return false;
 
+        Demolish(building);
+        return true;
+    }
+
+    /// <summary>Demolishes the given building and clears the selection.</summary>
+    void Demolish(Building building)
+    {
+        if (game == null)
+            return;
+
         game.DemolishBuilding(building);
         selected = null;
         selectedSoldier = null;
         controlPanel.SelectedMapBuilding = null;
-        log($"Demolished {building.Type} at {pos}");
-        return true;
+        log($"Demolished {building.Type} at {building.Position}");
+    }
+
+    /// <summary>Handles the destroy button of the building menu.</summary>
+    void OnDemolishRequested(Building building)
+    {
+        Demolish(building);
+    }
+
+    /// <summary>Handles a tool picked in the toolsmith menu.</summary>
+    void OnToolsmithOutputRequested(Building building, Material tool)
+    {
+        if (building.Type != BuildingType.Toolsmith)
+            return;
+        building.ToolsmithOutput = tool;
+        log($"Toolsmith now produces {tool}");
+    }
+
+    /// <summary>Handles the recruit/dismiss buttons of the military menu.</summary>
+    void OnSoldierRequested(Building building, bool recruit)
+    {
+        if (game == null)
+            return;
+
+        if (recruit)
+        {
+            if (game.RecruitSoldier(building))
+                log($"Recruited a soldier in {building.Type}");
+        }
+        else
+        {
+            if (game.DismissSoldier(building))
+                log($"Dismissed a soldier from {building.Type}");
+        }
     }
 
     /// <summary>Places the current building type at the given position.</summary>

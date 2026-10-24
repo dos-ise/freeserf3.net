@@ -184,6 +184,16 @@ public sealed class ControlPanel : IDisposable
     readonly Dictionary<BuildingType, TextureRegion> buildingIcons = new();
     readonly Dictionary<Material, TextureRegion> materialIcons = new();
 
+    // Building menu buttons (GUI images of dat file 3, from the
+    // settlers-remake selection layouts).
+    TextureRegion destroyButton = null!;
+    TextureRegion priorityButton = null!;
+    TextureRegion priorityButtonActive = null!;
+    TextureRegion workRadiusButton = null!;
+    readonly TextureRegion[] soldierMoreButtons = new TextureRegion[3];
+    readonly TextureRegion[] soldierLessButtons = new TextureRegion[3];
+    readonly TextureRegion[] soldierIcons = new TextureRegion[3];
+
     int primaryTab;      // 0 = build, 1 = goods, 2 = settlers
     int secondaryTab;    // 0 = normal, 1 = food, 2 = military, 3 = social
     BuildingType? selectedBuilding;
@@ -214,6 +224,15 @@ public sealed class ControlPanel : IDisposable
 
     /// <summary>Raised when the player picks a building to construct.</summary>
     public event Action<BuildingType>? BuildingSelected;
+
+    /// <summary>Raised when the destroy button of a selected building is clicked.</summary>
+    public event Action<Building>? DemolishRequested;
+
+    /// <summary>Raised when a tool is picked for the selected toolsmith.</summary>
+    public event Action<Building, Material>? ToolsmithOutputRequested;
+
+    /// <summary>Raised when a soldier is recruited (true) or dismissed (false).</summary>
+    public event Action<Building, bool>? SoldierRequested;
 
     /// <summary>Raised when the system (computer) button is clicked.</summary>
     public event Action? SystemButtonClicked;
@@ -299,6 +318,23 @@ public sealed class ControlPanel : IDisposable
         AddButtonPair(labeledButton, 0, LabeledButtonInactive, LabeledButtonActive, buttons);
 
         activeMark = AddImage(buttons.GetGui(ActiveMark)!);
+
+        // Building menu buttons (from the settlers-remake selection
+        // layouts): destroy (198), priority (192/195/378), work radius
+        // (201) and the soldier management buttons (21-42).
+        destroyButton = AddImage(buttons.GetGui(198)!);
+        priorityButton = AddImage(buttons.GetGui(192)!);
+        priorityButtonActive = AddImage(buttons.GetGui(195)!);
+        workRadiusButton = AddImage(buttons.GetGui(201)!);
+        soldierMoreButtons[0] = AddImage(buttons.GetGui(27)!);  // swordsman
+        soldierMoreButtons[1] = AddImage(buttons.GetGui(21)!);  // bowman
+        soldierMoreButtons[2] = AddImage(buttons.GetGui(24)!);  // pikeman
+        soldierLessButtons[0] = AddImage(buttons.GetGui(36)!);
+        soldierLessButtons[1] = AddImage(buttons.GetGui(30)!);
+        soldierLessButtons[2] = AddImage(buttons.GetGui(33)!);
+        soldierIcons[0] = AddImage(buttons.GetGui(45)!);        // swordsman
+        soldierIcons[1] = AddImage(buttons.GetGui(48)!);        // bowman
+        soldierIcons[2] = AddImage(buttons.GetGui(51)!);        // pikeman
 
         // 1x1 white pixel used to draw menu text as tinted quads.
         whiteRegion = AddImage(new DatImage(1, 1, 0, 0, new byte[] { 255, 255, 255, 255 }));
@@ -536,86 +572,172 @@ public sealed class ControlPanel : IDisposable
     }
 
     /// <summary>
-    /// Draws the info and status of the selected building: name, state
-    /// (construction progress or active), worker, production inputs and
-    /// output, and soldiers for military buildings.
+    /// Draws the info and status of the selected building as a graphical
+    /// menu (like the settlers-remake selection layouts): building icon
+    /// and name, construction progress or production status with material
+    /// icons, soldiers for military buildings, and destroy/close buttons.
     /// </summary>
     void DrawBuildingInfo()
     {
         float contentX = ContentLeft;
         float contentY = MiniMapHeight + ContentTop;
         float contentW = ContentWidth;
-        float contentH = ContentHeight;
 
         var building = SelectedMapBuilding;
         if (building == null)
             return;
 
         // Close button (X) in the top-right corner of the content area.
-        const float closeSize = 16f;
+        const float closeSize = 18f;
         float closeX = contentX + contentW - closeSize;
-        float closeY = contentY;
+        float closeY = contentY + 4f;
         AddSprite(whiteRegion, closeX, closeY, closeSize, closeSize, new Vector4(0.25f, 0.25f, 0.25f, 0.9f));
-        DrawText("X", closeX + 4f, closeY + 2f, 2f, 3f);
+        DrawText("X", closeX + 5f, closeY + 3f, 2f, 3f);
         AddClickRegion(closeX, closeY, closeSize, closeSize, () => SelectedMapBuilding = null);
 
-        // Building name.
-        string name = building.Type.ToString().ToUpperInvariant();
-        DrawText(name, contentX + 8f, contentY + 6f, 3f, 4f);
+        // Destroy button below the close button.
+        float destroyX = contentX + contentW - closeSize;
+        float destroyY = closeY + closeSize + 4f;
+        AddSprite(destroyButton, destroyX, destroyY, closeSize, closeSize);
+        AddClickRegion(destroyX, destroyY, closeSize, closeSize, () => DemolishRequested?.Invoke(building));
 
-        float y = contentY + 34f;
-        const float lineH = 20f;
-        const float glyphW = 2f, glyphH = 3f;
+        // Building icon and name.
+        if (buildingIcons.TryGetValue(building.Type, out var icon))
+            AddSprite(icon, contentX + 8f, contentY + 8f, 48f, 48f);
+        string name = building.Type.ToString().ToUpperInvariant();
+        DrawText(name, contentX + 64f, contentY + 16f, 3f, 4f);
+
+        float y = contentY + 70f;
+        const float lineH = 24f;
+        const float iconSize = 20f;
 
         if (building.State == BuildingState.ConstructionSite)
         {
-            DrawText($"CONSTRUCTION {building.ConstructionProgress}%", contentX + 8f, y, glyphW, glyphH);
+            // Construction progress bar.
+            DrawText($"CONSTRUCTION {building.ConstructionProgress}%", contentX + 8f, y, 2f, 3f);
             y += lineH;
+
+            // Delivered / needed materials with icons.
             foreach (var (material, count) in building.Definition.ConstructionCosts)
             {
                 int delivered = building.DeliveredMaterials.Get(material);
-                DrawText($"{material} {delivered}/{count}", contentX + 8f, y, glyphW, glyphH);
+                if (materialIcons.TryGetValue(material, out var matIcon))
+                    AddSprite(matIcon, contentX + 8f, y, iconSize, iconSize);
+                DrawText($"{delivered}/{count}", contentX + 34f, y + 4f, 2f, 3f);
                 y += lineH;
             }
         }
         else if (building.State == BuildingState.Active)
         {
-            DrawText("ACTIVE", contentX + 8f, y, glyphW, glyphH);
-            y += lineH;
-
+            // Worker status.
             if (building.HasWorker)
-                DrawText($"WORKER: {building.Worker}", contentX + 8f, y, glyphW, glyphH);
+                DrawText($"WORKER: {building.Worker}", contentX + 8f, y, 2f, 3f);
             else
-                DrawText("NO WORKER", contentX + 8f, y, glyphW, glyphH);
+                DrawText("NO WORKER", contentX + 8f, y, 2f, 3f);
             y += lineH;
 
             if (building.Definition.IsProducer)
             {
+                // Input materials with icons.
                 if (building.Definition.Inputs.Length > 0)
                 {
-                    DrawText("INPUT:", contentX + 8f, y, glyphW, glyphH);
+                    DrawText("INPUT:", contentX + 8f, y, 2f, 3f);
                     y += lineH;
                     foreach (var input in building.Definition.Inputs)
                     {
-                        DrawText($"  {input} {building.Input.Get(input)}", contentX + 8f, y, glyphW, glyphH);
+                        if (materialIcons.TryGetValue(input, out var matIcon))
+                            AddSprite(matIcon, contentX + 8f, y, iconSize, iconSize);
+                        DrawText($"{building.Input.Get(input)}", contentX + 34f, y + 4f, 2f, 3f);
                         y += lineH;
                     }
                 }
 
+                // Output material with icon.
                 if (building.Definition.Output is Material output)
                 {
                     var produced = building.Type == BuildingType.Toolsmith ? building.ToolsmithOutput : output;
-                    DrawText($"OUTPUT: {produced}", contentX + 8f, y, glyphW, glyphH);
+                    DrawText("OUTPUT:", contentX + 8f, y, 2f, 3f);
                     y += lineH;
+                    if (materialIcons.TryGetValue(produced, out var outIcon))
+                        AddSprite(outIcon, contentX + 8f, y, iconSize, iconSize);
+                    DrawText($"{building.Output.TotalCount}", contentX + 34f, y + 4f, 2f, 3f);
+                    y += lineH;
+                }
+
+                // The toolsmith can pick which tool it produces.
+                if (building.Type == BuildingType.Toolsmith)
+                {
+                    DrawText("PRODUCE:", contentX + 8f, y, 2f, 3f);
+                    y += 22f;
+                    DrawToolSelection(building, contentX, y);
+                    y += 30f;
                 }
             }
 
             if (building.Definition.IsMilitary)
-            {
-                DrawText($"SOLDIERS: {building.Soldiers.Count}/{building.Definition.SoldierCapacity}", contentX + 8f, y, glyphW, glyphH);
-                y += lineH;
-            }
+                DrawSoldiers(building, contentX, y);
         }
+    }
+
+    /// <summary>
+    /// Draws the tool selection of the toolsmith: the six tools as icons,
+    /// the currently produced one highlighted. Clicking a tool selects it.
+    /// </summary>
+    void DrawToolSelection(Building building, float contentX, float y)
+    {
+        var tools = new[] { Material.Hammer, Material.Axe, Material.Pick, Material.Saw, Material.Scythe, Material.FishingRod };
+        const float iconSize = 24f;
+        const float spacing = 4f;
+
+        for (int i = 0; i < tools.Length; i++)
+        {
+            float x = contentX + 8f + i * (iconSize + spacing);
+            bool active = building.ToolsmithOutput == tools[i];
+
+            // Background: highlighted for the active tool.
+            AddSprite(whiteRegion, x, y, iconSize, iconSize, active
+                ? new Vector4(0.35f, 0.35f, 0.1f, 0.9f)
+                : new Vector4(0.15f, 0.15f, 0.15f, 0.8f));
+
+            if (materialIcons.TryGetValue(tools[i], out var icon))
+                AddSprite(icon, x + 2f, y + 2f, iconSize - 4f, iconSize - 4f);
+
+            var tool = tools[i];
+            AddClickRegion(x, y, iconSize, iconSize, () => ToolsmithOutputRequested?.Invoke(building, tool));
+        }
+    }
+
+    /// <summary>
+    /// Draws the soldier management of a military building: one slot per
+    /// soldier capacity with a soldier icon, the current count and
+    /// recruit/dismiss buttons.
+    /// </summary>
+    void DrawSoldiers(Building building, float contentX, float y)
+    {
+        const float slotSize = 24f;
+        const float iconSize = 20f;
+        const float btnSize = 18f;
+        int capacity = building.Definition.SoldierCapacity;
+        int count = building.Soldiers.Count;
+
+        DrawText($"SOLDIERS {count}/{capacity}", contentX + 8f, y, 2f, 3f);
+        y += 22f;
+
+        // Soldier slots: filled for stationed soldiers, empty otherwise.
+        for (int i = 0; i < capacity; i++)
+        {
+            float x = contentX + 8f + i * (slotSize + 4f);
+            AddSprite(whiteRegion, x, y, slotSize, slotSize, new Vector4(0.15f, 0.15f, 0.15f, 0.8f));
+            if (i < count && soldierIcons[0] != null)
+                AddSprite(soldierIcons[0], x + (slotSize - iconSize) / 2f, y + (slotSize - iconSize) / 2f, iconSize, iconSize);
+        }
+
+        // Recruit (+) and dismiss (-) buttons.
+        float btnY = y + slotSize + 6f;
+        AddSprite(soldierMoreButtons[0], contentX + 8f, btnY, btnSize, btnSize);
+        AddClickRegion(contentX + 8f, btnY, btnSize, btnSize, () => SoldierRequested?.Invoke(building, true));
+        AddSprite(soldierLessButtons[0], contentX + 8f + btnSize + 4f, btnY, btnSize, btnSize);
+        AddClickRegion(contentX + 8f + btnSize + 4f, btnY, btnSize, btnSize, () => SoldierRequested?.Invoke(building, false));
     }
 
     /// <summary>Draws the tooltip for the given building next to the mouse.</summary>

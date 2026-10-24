@@ -1986,5 +1986,32 @@ public class GameTests : DataTestBase
 
         Assert.IsTrue(recovered, "The wounded soldier should retreat and recover.");
     }
+
+    [TestMethod]
+    public void RecruitAndDismissSoldier()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var tower = new Building(BuildingType.Tower, new Position(4, 4), 0);
+        tower.MarkActive();
+        game.Buildings.Add(tower);
+
+        // Give the player a free settler and a weapon.
+        game.GetPlayer(0)!.FreeSettlers = 1;
+        game.GetPlayer(0)!.Inventory.Set(Material.Sword, 1);
+
+        Assert.IsTrue(game.RecruitSoldier(tower), "Recruiting should succeed.");
+        Assert.AreEqual(1, tower.Soldiers.Count);
+        Assert.AreEqual(0, game.GetPlayer(0)!.FreeSettlers);
+
+        Assert.IsTrue(game.DismissSoldier(tower), "Dismissing should succeed.");
+        Assert.AreEqual(0, tower.Soldiers.Count);
+        Assert.AreEqual(1, game.GetPlayer(0)!.FreeSettlers);
+    }
 }
 

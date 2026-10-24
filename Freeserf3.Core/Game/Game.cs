@@ -1114,6 +1114,62 @@ public sealed class Game
     }
 
     /// <summary>
+    /// Recruits one soldier into the given military building: takes a free
+    /// settler and a weapon from the player's stock. Returns true on
+    /// success.
+    /// </summary>
+    public bool RecruitSoldier(Building building)
+    {
+        if (building.State != BuildingState.Active || !building.Definition.IsMilitary)
+            return false;
+        if (!building.HasSoldierCapacity)
+            return false;
+
+        var player = GetPlayer(building.Player);
+        if (player == null || player.FreeSettlers <= 0)
+            return false;
+        if (player.Inventory.WeaponCount <= 0)
+            return false;
+
+        // Take one weapon (sword, spear or bow).
+        Material weapon = MaterialExtensions.Weapons.First(w => player.Inventory.Get(w) > 0);
+        player.Inventory.Remove(weapon);
+        player.FreeSettlers--;
+
+        var start = building.Flag?.Position ?? building.Position;
+        var soldier = new Serf(building.Player, start, SerfType.Soldier)
+        {
+            Barracks = building,
+            Weapon = weapon,
+            SoldierState = SoldierState.Idle,
+            MoveInterval = Serf.DefaultMoveInterval,
+            Health = GetSoldierStats(weapon).Health
+        };
+        building.Soldiers.Add(soldier);
+        Settlers.Add(soldier);
+        return true;
+    }
+
+    /// <summary>
+    /// Dismisses one soldier from the given military building: the soldier
+    /// becomes a free settler again. Returns true on success.
+    /// </summary>
+    public bool DismissSoldier(Building building)
+    {
+        if (building.Soldiers.Count <= 0)
+            return false;
+
+        var soldier = building.Soldiers[^1];
+        building.Soldiers.Remove(soldier);
+        Settlers.Remove(soldier);
+
+        var player = GetPlayer(building.Player);
+        if (player != null)
+            player.FreeSettlers++;
+        return true;
+    }
+
+    /// <summary>
     /// Advances the military: active military buildings recruit soldiers
     /// from free settlers with weapons and attack enemy settlers in range.
     /// </summary>
@@ -1136,22 +1192,7 @@ public sealed class Game
             if (player.Inventory.WeaponCount <= 0)
                 continue;
 
-            // Take one weapon (sword, spear or bow).
-            Material weapon = MaterialExtensions.Weapons.First(w => player.Inventory.Get(w) > 0);
-            player.Inventory.Remove(weapon);
-            player.FreeSettlers--;
-
-            var start = building.Flag?.Position ?? building.Position;
-            var soldier = new Serf(building.Player, start, SerfType.Soldier)
-            {
-                Barracks = building,
-                Weapon = weapon,
-                SoldierState = SoldierState.Idle,
-                MoveInterval = Serf.DefaultMoveInterval,
-                Health = GetSoldierStats(weapon).Health
-            };
-            building.Soldiers.Add(soldier);
-            Settlers.Add(soldier);
+            RecruitSoldier(building);
         }
 
         // Soldiers patrol around their building and fight enemies.
