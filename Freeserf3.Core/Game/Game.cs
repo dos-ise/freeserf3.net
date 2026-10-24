@@ -1034,6 +1034,16 @@ public sealed class Game
     }
 
     /// <summary>
+    /// Whether any player claims the territory at the given position.
+    /// </summary>
+    public bool HasTerritoryOwner(Position pos)
+    {
+        if (!Map.IsInBounds(pos))
+            return false;
+        return territory[pos.Y * Map.Size + pos.X] != 255;
+    }
+
+    /// <summary>
     /// Advances the military: active military buildings recruit soldiers
     /// from free settlers with weapons and attack enemy settlers in range.
     /// </summary>

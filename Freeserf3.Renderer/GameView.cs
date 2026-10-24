@@ -771,7 +771,9 @@ public sealed class GameView : IDisposable
                 var pos = new Position(x, y);
                 var cell = gameMap.GetCell(x, y);
                 int owner = game?.GetTerritoryPlayer(pos) ?? cell.Player;
-                if (owner == 0)
+                if (game != null && !game.HasTerritoryOwner(pos))
+                    continue;
+                if (owner == 0 && game == null)
                     continue;
                 if (LandscapeMapping.IsWater(cell.Landscape))
                     continue;
@@ -790,7 +792,8 @@ public sealed class GameView : IDisposable
                         break;
                     }
                     int neighborOwner = game?.GetTerritoryPlayer(neighbor) ?? neighborCell.Player;
-                    if (neighborOwner != owner)
+                    bool neighborClaimed = game == null || game.HasTerritoryOwner(neighbor);
+                    if (neighborOwner != owner || !neighborClaimed)
                     {
                         isBorder = true;
                         break;
