@@ -190,6 +190,8 @@ public sealed class ControlPanel : IDisposable
     TextureRegion priorityButton = null!;
     TextureRegion priorityButtonActive = null!;
     TextureRegion workRadiusButton = null!;
+    TextureRegion stockAcceptButton = null!;
+    TextureRegion stockRejectButton = null!;
     readonly TextureRegion[] soldierMoreButtons = new TextureRegion[3];
     readonly TextureRegion[] soldierLessButtons = new TextureRegion[3];
     readonly TextureRegion[] soldierIcons = new TextureRegion[3];
@@ -199,6 +201,13 @@ public sealed class ControlPanel : IDisposable
     BuildingType? selectedBuilding;
     bool systemMenuVisible;
     bool isPaused;
+
+    /// <summary>
+    /// Pending stock accept changes: materials whose accept state was
+    /// toggled in the stock menu but not yet confirmed with the accept
+    /// button. The reject button clears this list.
+    /// </summary>
+    readonly HashSet<Material> pendingStockChanges = new();
 
     /// <summary>The mouse position in screen pixels (for tooltips).</summary>
     public Vector2? MousePosition { get; set; }
@@ -233,6 +242,12 @@ public sealed class ControlPanel : IDisposable
 
     /// <summary>Raised when a soldier is recruited (true) or dismissed (false).</summary>
     public event Action<Building, bool>? SoldierRequested;
+
+    /// <summary>
+    /// Raised when the stock accept/reject buttons are clicked: the
+    /// building, the material and whether it should be accepted.
+    /// </summary>
+    public event Action<Building, Material, bool>? StockAcceptRequested;
 
     /// <summary>Raised when the system (computer) button is clicked.</summary>
     public event Action? SystemButtonClicked;
@@ -326,6 +341,8 @@ public sealed class ControlPanel : IDisposable
         priorityButton = AddImage(buttons.GetGui(192)!);
         priorityButtonActive = AddImage(buttons.GetGui(195)!);
         workRadiusButton = AddImage(buttons.GetGui(201)!);
+        stockAcceptButton = AddImage(buttons.GetGui(213)!);
+        stockRejectButton = AddImage(buttons.GetGui(216)!);
         soldierMoreButtons[0] = AddImage(buttons.GetGui(27)!);  // swordsman
         soldierMoreButtons[1] = AddImage(buttons.GetGui(21)!);  // bowman
         soldierMoreButtons[2] = AddImage(buttons.GetGui(24)!);  // pikeman
@@ -629,6 +646,15 @@ public sealed class ControlPanel : IDisposable
         }
         else if (building.State == BuildingState.Active)
         {
+            // The stock shows the material grid with the player's
+            // inventory and the accept/reject controls (like the
+            // settlers-remake StockSelectionLayout).
+            if (building.Type == BuildingType.Stock)
+            {
+                DrawStockMenu(building, contentX, y);
+                return;
+            }
+
             // Worker status.
             if (building.HasWorker)
                 DrawText($"WORKER: {building.Worker}", contentX + 8f, y, 2f, 3f);
@@ -738,6 +764,76 @@ public sealed class ControlPanel : IDisposable
         AddClickRegion(contentX + 8f, btnY, btnSize, btnSize, () => SoldierRequested?.Invoke(building, true));
         AddSprite(soldierLessButtons[0], contentX + 8f + btnSize + 4f, btnY, btnSize, btnSize);
         AddClickRegion(contentX + 8f + btnSize + 4f, btnY, btnSize, btnSize, () => SoldierRequested?.Invoke(building, false));
+    }
+
+    /// <summary>
+    /// Draws the stock menu: the 6x6 material grid with the player's
+    /// inventory, a green/red dot per material showing whether the stock
+    /// accepts it, and the accept/reject buttons to confirm changes (like
+    /// the settlers-remake StockSelectionLayout).
+    /// </summary>
+    void DrawStockMenu(Building building, float contentX, float y)
+    {
+        const float cellSize = 24f;
+        const float spacing = 4f;
+        const float dotSize = 5f;
+        const int columns = 6;
+
+        var player = Player;
+        bool accepts(Material material)
+        {
+            bool actual = player?.AcceptsMaterial(material) ?? true;
+            return pendingStockChanges.Contains(material) ? !actual : actual;
+        }
+
+        for (int i = 0; i < StockGoods.Length; i++)
+        {
+            var (material, _, _) = StockGoods[i];
+            int col = i % columns;
+            int row = i / columns;
+            float x = contentX + 8f + col * (cellSize + spacing);
+            float cellY = y + row * (cellSize + spacing);
+
+            // Cell background, highlighted while a change is pending.
+            bool pending = pendingStockChanges.Contains(material);
+            AddSprite(whiteRegion, x, cellY, cellSize, cellSize, pending
+                ? new Vector4(0.3f, 0.3f, 0.12f, 0.9f)
+                : new Vector4(0.15f, 0.15f, 0.15f, 0.8f));
+
+            if (materialIcons.TryGetValue(material, out var icon))
+                AddSprite(icon, x + 2f, cellY + 2f, cellSize - 4f, cellSize - 4f);
+
+            // Accept dot: green when the stock accepts the material, red
+            // otherwise.
+            var dotColor = accepts(material)
+                ? new Vector4(0.1f, 0.8f, 0.1f, 1f)
+                : new Vector4(0.9f, 0.15f, 0.15f, 1f);
+            AddSprite(whiteRegion, x + cellSize - dotSize - 1f, cellY + 1f, dotSize, dotSize, dotColor);
+
+            // Count in the player's stock.
+            int count = player?.Inventory.Get(material) ?? 0;
+            DrawText($"{count}", x + 2f, cellY + cellSize - 8f, 1.5f, 2f);
+
+            var mat = material;
+            AddClickRegion(x, cellY, cellSize, cellSize, () =>
+            {
+                if (!pendingStockChanges.Remove(mat))
+                    pendingStockChanges.Add(mat);
+            });
+        }
+
+        // Accept / reject buttons below the grid.
+        const float btnSize = 18f;
+        float btnY = y + 6 * (cellSize + spacing) + 6f;
+        AddSprite(stockAcceptButton, contentX + 8f, btnY, btnSize, btnSize);
+        AddClickRegion(contentX + 8f, btnY, btnSize, btnSize, () =>
+        {
+            foreach (var material in pendingStockChanges)
+                StockAcceptRequested?.Invoke(building, material, !(player?.AcceptsMaterial(material) ?? true));
+            pendingStockChanges.Clear();
+        });
+        AddSprite(stockRejectButton, contentX + 8f + btnSize + 4f, btnY, btnSize, btnSize);
+        AddClickRegion(contentX + 8f + btnSize + 4f, btnY, btnSize, btnSize, () => pendingStockChanges.Clear());
     }
 
     /// <summary>Draws the tooltip for the given building next to the mouse.</summary>

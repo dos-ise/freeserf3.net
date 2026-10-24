@@ -2013,5 +2013,26 @@ public class GameTests : DataTestBase
         Assert.AreEqual(0, tower.Soldiers.Count);
         Assert.AreEqual(1, game.GetPlayer(0)!.FreeSettlers);
     }
+
+    [TestMethod]
+    public void StockAcceptsMaterial()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var player = game.GetPlayer(0)!;
+        Assert.IsTrue(player.AcceptsMaterial(Material.Plank), "All materials are accepted by default.");
+
+        game.SetStockAccepts(0, Material.Plank, false);
+        Assert.IsFalse(player.AcceptsMaterial(Material.Plank), "Plank should be rejected.");
+        Assert.IsTrue(player.AcceptsMaterial(Material.Stone), "Other materials stay accepted.");
+
+        game.SetStockAccepts(0, Material.Plank, true);
+        Assert.IsTrue(player.AcceptsMaterial(Material.Plank), "Plank should be accepted again.");
+    }
 }
 

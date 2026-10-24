@@ -240,6 +240,7 @@ public sealed class GameView : IDisposable
         controlPanel.DemolishRequested += OnDemolishRequested;
         controlPanel.ToolsmithOutputRequested += OnToolsmithOutputRequested;
         controlPanel.SoldierRequested += OnSoldierRequested;
+        controlPanel.StockAcceptRequested += OnStockAcceptRequested;
         controlPanel.SystemButtonClicked += OnSystemButtonClicked;
         controlPanel.PauseRequested += OnPauseRequested;
         controlPanel.MusicRequested += OnMusicRequested;
@@ -1207,6 +1208,15 @@ public sealed class GameView : IDisposable
             if (game.DismissSoldier(building))
                 log($"Dismissed a soldier from {building.Type}");
         }
+    }
+
+    /// <summary>Handles the accept/reject buttons of the stock menu.</summary>
+    void OnStockAcceptRequested(Building building, Material material, bool accepts)
+    {
+        if (game == null)
+            return;
+        game.SetStockAccepts(building.Player, material, accepts);
+        log($"Stock {(accepts ? "accepts" : "rejects")} {material}");
     }
 
     /// <summary>Places the current building type at the given position.</summary>

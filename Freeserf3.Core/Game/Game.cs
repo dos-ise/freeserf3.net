@@ -1170,6 +1170,18 @@ public sealed class Game
     }
 
     /// <summary>
+    /// Sets whether the given player's stock accepts a material. Goods
+    /// that are not accepted are not carried to the stock.
+    /// </summary>
+    public void SetStockAccepts(int playerIndex, Material material, bool accepts)
+    {
+        var player = GetPlayer(playerIndex);
+        if (player == null)
+            return;
+        player.SetAcceptsMaterial(material, accepts);
+    }
+
+    /// <summary>
     /// Advances the military: active military buildings recruit soldiers
     /// from free settlers with weapons and attack enemy settlers in range.
     /// </summary>
@@ -1742,10 +1754,18 @@ public sealed class Game
                     if (collector.State != MovableState.Idle)
                         break;
 
-                    // Arrived at the stack: pick up one good.
+                    // Arrived at the stack: pick up one good, but only if
+                    // the player's stock accepts this material.
                     var target = collector.CollectorTarget;
                     if (target != null && !target.IsEmpty)
                     {
+                        var player = GetPlayer(collector.Player);
+                        if (player != null && !player.AcceptsMaterial(target.Material))
+                        {
+                            collector.CollectorState = CollectorState.LookingForStack;
+                            break;
+                        }
+
                         var material = target.TakeOne();
                         if (material.HasValue)
                         {

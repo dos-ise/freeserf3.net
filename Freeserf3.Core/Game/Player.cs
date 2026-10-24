@@ -41,6 +41,26 @@ public sealed class Player
     /// <summary>The player's central goods stock.</summary>
     public Inventory Inventory { get; } = new();
 
+    /// <summary>
+    /// The materials the stock accepts. Goods that are not accepted are
+    /// not carried to the stock (like the original game, where the stock
+    /// can be limited to keep goods for trading). Defaults to all
+    /// materials.
+    /// </summary>
+    readonly HashSet<Material> stockAccepts = new(MaterialExtensions.All);
+
+    /// <summary>Whether the stock accepts the given material.</summary>
+    public bool AcceptsMaterial(Material material) => stockAccepts.Contains(material);
+
+    /// <summary>Sets whether the stock accepts the given material.</summary>
+    public void SetAcceptsMaterial(Material material, bool accepts)
+    {
+        if (accepts)
+            stockAccepts.Add(material);
+        else
+            stockAccepts.Remove(material);
+    }
+
     /// <summary>Number of settlers (population).</summary>
     public int Population { get; set; }
 
