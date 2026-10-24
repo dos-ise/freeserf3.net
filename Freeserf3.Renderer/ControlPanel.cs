@@ -187,8 +187,9 @@ public sealed class ControlPanel : IDisposable
     // Building menu buttons (GUI images of dat file 3, from the
     // settlers-remake selection layouts).
     TextureRegion destroyButton = null!;
-    TextureRegion priorityButton = null!;
-    TextureRegion priorityButtonActive = null!;
+    TextureRegion priorityButtonStopped = null!;
+    TextureRegion priorityButtonLow = null!;
+    TextureRegion priorityButtonHigh = null!;
     TextureRegion workRadiusButton = null!;
     TextureRegion stockAcceptButton = null!;
     TextureRegion stockRejectButton = null!;
@@ -248,6 +249,9 @@ public sealed class ControlPanel : IDisposable
     /// building, the material and whether it should be accepted.
     /// </summary>
     public event Action<Building, Material, bool>? StockAcceptRequested;
+
+    /// <summary>Raised when the priority button of a building is clicked.</summary>
+    public event Action<Building, BuildingPriority>? PriorityRequested;
 
     /// <summary>Raised when the system (computer) button is clicked.</summary>
     public event Action? SystemButtonClicked;
@@ -338,8 +342,9 @@ public sealed class ControlPanel : IDisposable
         // layouts): destroy (198), priority (192/195/378), work radius
         // (201) and the soldier management buttons (21-42).
         destroyButton = AddImage(buttons.GetGui(198)!);
-        priorityButton = AddImage(buttons.GetGui(192)!);
-        priorityButtonActive = AddImage(buttons.GetGui(195)!);
+        priorityButtonStopped = AddImage(buttons.GetGui(192)!);
+        priorityButtonLow = AddImage(buttons.GetGui(195)!);
+        priorityButtonHigh = AddImage(buttons.GetGui(378)!);
         workRadiusButton = AddImage(buttons.GetGui(201)!);
         stockAcceptButton = AddImage(buttons.GetGui(213)!);
         stockRejectButton = AddImage(buttons.GetGui(216)!);
@@ -617,6 +622,30 @@ public sealed class ControlPanel : IDisposable
         float destroyY = closeY + closeSize + 4f;
         AddSprite(destroyButton, destroyX, destroyY, closeSize, closeSize);
         AddClickRegion(destroyX, destroyY, closeSize, closeSize, () => DemolishRequested?.Invoke(building));
+
+        // Priority button below the destroy button (producers and military
+        // buildings). Clicking cycles stopped -> low -> high -> stopped.
+        if (building.Definition.IsProducer || building.Definition.IsMilitary)
+        {
+            float priorityY = destroyY + closeSize + 4f;
+            var priorityImage = building.Priority switch
+            {
+                BuildingPriority.High => priorityButtonHigh,
+                BuildingPriority.Stopped => priorityButtonStopped,
+                _ => priorityButtonLow
+            };
+            AddSprite(priorityImage, destroyX, priorityY, closeSize, closeSize);
+            AddClickRegion(destroyX, priorityY, closeSize, closeSize, () =>
+            {
+                var next = building.Priority switch
+                {
+                    BuildingPriority.Low => BuildingPriority.High,
+                    BuildingPriority.High => BuildingPriority.Stopped,
+                    _ => BuildingPriority.Low
+                };
+                PriorityRequested?.Invoke(building, next);
+            });
+        }
 
         // Building icon and name.
         if (buildingIcons.TryGetValue(building.Type, out var icon))

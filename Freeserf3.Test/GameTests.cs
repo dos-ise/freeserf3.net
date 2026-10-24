@@ -2034,5 +2034,45 @@ public class GameTests : DataTestBase
         game.SetStockAccepts(0, Material.Plank, true);
         Assert.IsTrue(player.AcceptsMaterial(Material.Plank), "Plank should be accepted again.");
     }
+
+    [TestMethod]
+    public void BuildingPriorityStopsProduction()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var sawmill = game.PlaceBuilding(BuildingType.Sawmill, new Position(4, 4), 0);
+        for (int i = 0; i < 3000; i++)
+            game.TickOnce();
+
+        Assert.AreEqual(BuildingState.Active, sawmill!.State);
+        Assert.IsTrue(sawmill.HasWorker);
+        Assert.AreEqual(BuildingPriority.Low, sawmill.Priority, "Default priority is Low.");
+
+        // Produces while running: the input trunk is consumed.
+        sawmill.Input.Add(Material.Trunk);
+        int productionTime = sawmill.Definition.ProductionTime;
+        for (int i = 0; i < productionTime + 10; i++)
+            game.TickOnce();
+        Assert.AreEqual(0, sawmill.Input.Get(Material.Trunk), "Sawmill should consume its input at Low priority.");
+
+        // Stopped buildings do not produce: the input stays.
+        game.SetBuildingPriority(sawmill, BuildingPriority.Stopped);
+        sawmill.Input.Add(Material.Trunk);
+        for (int i = 0; i < productionTime + 10; i++)
+            game.TickOnce();
+        Assert.AreEqual(1, sawmill.Input.Get(Material.Trunk), "Stopped sawmill should not consume its input.");
+
+        // High priority produces again.
+        game.SetBuildingPriority(sawmill, BuildingPriority.High);
+        sawmill.Input.Add(Material.Trunk);
+        for (int i = 0; i < productionTime + 10; i++)
+            game.TickOnce();
+        Assert.AreEqual(1, sawmill.Input.Get(Material.Trunk), "Sawmill should consume its input at High priority.");
+    }
 }
 

@@ -1181,6 +1181,14 @@ public sealed class Game
         player.SetAcceptsMaterial(material, accepts);
     }
 
+    /// <summary>Sets the production priority of a building.</summary>
+    public void SetBuildingPriority(Building building, BuildingPriority priority)
+    {
+        if (building == null)
+            return;
+        building.Priority = priority;
+    }
+
     /// <summary>
     /// Advances the military: active military buildings recruit soldiers
     /// from free settlers with weapons and attack enemy settlers in range.
@@ -2201,40 +2209,47 @@ public sealed class Game
     }
 
     /// <summary>
-    /// Whether the given material is a production input that one of the
-    /// player's active producer buildings is waiting for. Such materials
-    /// stay at the stock flag so the carriers can deliver them.
+    /// The priority of a material for the player's goods distribution:
+    /// 3 = production input for a high-priority producer, 2 = construction
+    /// material for a construction site, 1 = production input for a normal
+    /// producer, 0 = everything else. The carriers pick up higher-priority
+    /// goods first so construction sites and production chains do not
+    /// starve.
     /// </summary>
-    bool IsInputMaterialNeeded(Player player, Material material)
+    public int GetMaterialPriority(Player player, Material material)
     {
+        if (IsConstructionMaterialNeeded(player, material))
+            return 2;
+        return InputMaterialPriority(player, material);
+    }
+
+    /// <summary>
+    /// The distribution priority of a material that is a production input
+    /// of one of the player's active producer buildings: 3 when a
+    /// high-priority building waits for it, 1 for normal buildings, 0 when
+    /// no building needs it. Stopped buildings are ignored.
+    /// </summary>
+    int InputMaterialPriority(Player player, Material material)
+    {
+        int priority = 0;
         foreach (var building in Buildings)
         {
             if (building.Player != player.Index)
                 continue;
             if (building.State != BuildingState.Active)
                 continue;
+            if (building.Priority == BuildingPriority.Stopped)
+                continue;
             if (!building.Definition.IsProducer)
                 continue;
             if (building.Definition.Consumes(material) && building.Input.Get(material) <= 0)
-                return true;
+            {
+                if (building.Priority == BuildingPriority.High)
+                    return 3;
+                priority = 1;
+            }
         }
-        return false;
-    }
-
-    /// <summary>
-    /// The priority of a material for the player's goods distribution:
-    /// 2 = construction material for a construction site, 1 = production
-    /// input for a producer, 0 = everything else. The carriers pick up
-    /// higher-priority goods first so construction sites and production
-    /// chains do not starve.
-    /// </summary>
-    public int GetMaterialPriority(Player player, Material material)
-    {
-        if (IsConstructionMaterialNeeded(player, material))
-            return 2;
-        if (IsInputMaterialNeeded(player, material))
-            return 1;
-        return 0;
+        return priority;
     }
 
     /// <summary>
@@ -2271,7 +2286,12 @@ public sealed class Game
             // radius; without ore the production stops (like
             // settlers-remake MineBuilding.tryTakingResource). Farms need
             // fertile ground and fishers need water in their work area.
-            if (building.Definition.IsMine && !HasMineResource(building))
+            // A stopped building (priority Stopped) does not produce.
+            if (building.Priority == BuildingPriority.Stopped)
+            {
+                building.ResetProduction();
+            }
+            else if (building.Definition.IsMine && !HasMineResource(building))
             {
                 building.ResetProduction();
             }
@@ -2396,7 +2416,7 @@ public sealed class Game
             while (stock.Count > 0)
             {
                 var good = stock.TakeGood();
-                if (good.HasValue && (IsConstructionMaterialNeeded(player, good.Value) || IsInputMaterialNeeded(player, good.Value)))
+                if (good.HasValue && (IsConstructionMaterialNeeded(player, good.Value) || InputMaterialPriority(player, good.Value) > 0))
                     needed.Add(good.Value);
                 else if (good.HasValue)
                     player.Inventory.Add(good.Value);

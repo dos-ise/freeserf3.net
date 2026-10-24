@@ -241,6 +241,7 @@ public sealed class GameView : IDisposable
         controlPanel.ToolsmithOutputRequested += OnToolsmithOutputRequested;
         controlPanel.SoldierRequested += OnSoldierRequested;
         controlPanel.StockAcceptRequested += OnStockAcceptRequested;
+        controlPanel.PriorityRequested += OnPriorityRequested;
         controlPanel.SystemButtonClicked += OnSystemButtonClicked;
         controlPanel.PauseRequested += OnPauseRequested;
         controlPanel.MusicRequested += OnMusicRequested;
@@ -1217,6 +1218,15 @@ public sealed class GameView : IDisposable
             return;
         game.SetStockAccepts(building.Player, material, accepts);
         log($"Stock {(accepts ? "accepts" : "rejects")} {material}");
+    }
+
+    /// <summary>Handles the priority button of a building menu.</summary>
+    void OnPriorityRequested(Building building, BuildingPriority priority)
+    {
+        if (game == null)
+            return;
+        game.SetBuildingPriority(building, priority);
+        log($"{building.Type} priority: {priority}");
     }
 
     /// <summary>Places the current building type at the given position.</summary>

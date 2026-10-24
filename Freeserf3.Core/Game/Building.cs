@@ -29,6 +29,23 @@ public enum BuildingState
 }
 
 /// <summary>
+/// The production priority of a building (like settlers-remake
+/// EPriority). A stopped building does not produce; high-priority
+/// buildings get their inputs before low-priority ones.
+/// </summary>
+public enum BuildingPriority
+{
+    /// <summary>The building does not produce.</summary>
+    Stopped = 0,
+
+    /// <summary>Normal production priority (the default).</summary>
+    Low = 1,
+
+    /// <summary>High production priority.</summary>
+    High = 2
+}
+
+/// <summary>
 /// One building instance on the map. Holds its position, owner, state,
 /// construction progress, assigned worker and production progress.
 /// </summary>
@@ -55,6 +72,9 @@ public sealed class Building
     public BuildingDefinition Definition => BuildingDefinition.Get(Type);
 
     public BuildingState State { get; private set; } = BuildingState.ConstructionSite;
+
+    /// <summary>The production priority of the building (default Low).</summary>
+    public BuildingPriority Priority { get; set; } = BuildingPriority.Low;
 
     /// <summary>Construction progress in percent (0..100).</summary>
     public int ConstructionProgress { get; private set; }
