@@ -2480,5 +2480,17 @@ public sealed class Game
                 }
             }
         }
+
+        // AI players without buildings and settlers are defeated and stop
+        // playing.
+        for (int i = 1; i < Players.Count; i++)
+        {
+            var ai = Players[i];
+            if (!ai.IsActive)
+                continue;
+            if (ai.Population > 0 || Buildings.Any(b => b.Player == i && b.State != BuildingState.Destroyed))
+                continue;
+            ai.IsActive = false;
+        }
     }
 }

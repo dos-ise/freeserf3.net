@@ -49,6 +49,9 @@ public sealed class AiPlayer
     /// <summary>Advances the AI by one game tick.</summary>
     public void Tick()
     {
+        if (!player.IsActive)
+            return;
+
         if (game.Tick % BuildInterval == 0)
             TryBuild();
 

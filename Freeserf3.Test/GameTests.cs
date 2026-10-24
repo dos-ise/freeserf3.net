@@ -1926,5 +1926,32 @@ public class GameTests : DataTestBase
         Assert.IsTrue(game.IsDefeated, "The human should lose when an AI reaches the target population.");
         Assert.IsFalse(game.IsWon);
     }
+
+    [TestMethod]
+    public void AiPlayerIsDefeatedWithoutBuildingsOrSettlers()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Players.Add(new MapPlayerInfo { Name = "P1" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 1, PosX = 10, PosY = 10 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Remove all AI buildings and settlers.
+        foreach (var building in game.Buildings.Where(b => b.Player == 1).ToList())
+            game.DemolishBuilding(building);
+        foreach (var settler in game.Settlers.Where(s => s.Player == 1).ToList())
+            game.Settlers.Remove(settler);
+        game.GetPlayer(1)!.Population = 0;
+        game.GetPlayer(1)!.FreeSettlers = 0;
+
+        for (int i = 0; i < 700 && game.Players[1].IsActive; i++)
+            game.TickOnce();
+
+        Assert.IsFalse(game.Players[1].IsActive, "The AI player should be defeated.");
+        Assert.IsTrue(game.Players[0].IsActive, "The human player stays active.");
+    }
 }
 
