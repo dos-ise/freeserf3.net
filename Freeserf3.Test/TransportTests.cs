@@ -40,6 +40,40 @@ public class TransportTests
     }
 
     [TestMethod]
+    public void FlagTakesHighestPriorityGood()
+    {
+        var flag = new Flag(new Position(2, 2), 0);
+        flag.AddGood(Material.Bread);   // priority 1
+        flag.AddGood(Material.Stone);   // priority 2
+        flag.AddGood(Material.Trunk);   // priority 0
+
+        int Priority(Material m) => m switch
+        {
+            Material.Stone => 2,
+            Material.Bread => 1,
+            _ => 0
+        };
+
+        // The highest-priority good is taken first, regardless of position.
+        Assert.AreEqual(Material.Stone, flag.TakeHighestPriority(Priority));
+        Assert.AreEqual(Material.Bread, flag.TakeHighestPriority(Priority));
+        Assert.AreEqual(Material.Trunk, flag.TakeHighestPriority(Priority));
+        Assert.IsNull(flag.TakeHighestPriority(Priority));
+    }
+
+    [TestMethod]
+    public void FlagTakesHighestPriorityTiesByFifo()
+    {
+        var flag = new Flag(new Position(2, 2), 0);
+        flag.AddGood(Material.Plank);
+        flag.AddGood(Material.Stone);
+
+        // Equal priorities keep the FIFO order.
+        Assert.AreEqual(Material.Plank, flag.TakeHighestPriority(_ => 1));
+        Assert.AreEqual(Material.Stone, flag.TakeHighestPriority(_ => 1));
+    }
+
+    [TestMethod]
     public void CarrierTransportsGoodToEndFlag()
     {
         var start = new Flag(new Position(0, 0), 0);
@@ -68,6 +102,24 @@ public class TransportTests
         Assert.IsFalse(road.IsCarrying);
         Assert.AreEqual(1, end.Count);
         Assert.AreEqual(Material.Plank, end.TakeGood());
+    }
+
+    [TestMethod]
+    public void CarrierPicksUpHighestPriorityGood()
+    {
+        var start = new Flag(new Position(0, 0), 0);
+        var end = new Flag(new Position(2, 0), 0);
+        var road = new Road(start, end, new List<Position> { new(1, 0), new(2, 0) }, 0);
+        road.PriorityFunc = m => m == Material.Stone ? 2 : m == Material.Bread ? 1 : 0;
+
+        // Bread (priority 1) is queued before stone (priority 2), but the
+        // carrier picks up the higher-priority good first.
+        start.AddGood(Material.Bread);
+        start.AddGood(Material.Stone);
+
+        road.Tick();
+        Assert.IsTrue(road.IsCarrying);
+        Assert.AreEqual(Material.Stone, road.Carrier.CarriedGood);
     }
 
     [TestMethod]

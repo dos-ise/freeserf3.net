@@ -206,6 +206,55 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void MaterialPriorityPrefersConstructionOverInput()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 8, PosY = 8 });
+        map.Buildings.Add(new MapBuilding { Party = 0, BuildingType = 7, PosX = 10, PosY = 10 }); // coalmine (active)
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // A construction site needing stone.
+        game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+
+        var player = game.GetPlayer(0)!;
+        // Construction materials have the highest priority, production
+        // inputs come second, everything else last.
+        Assert.AreEqual(2, game.GetMaterialPriority(player, Material.Stone));
+        Assert.AreEqual(1, game.GetMaterialPriority(player, Material.Bread));
+        Assert.AreEqual(0, game.GetMaterialPriority(player, Material.Trunk));
+    }
+
+    [TestMethod]
+    public void StockFlagMovesUnneededGoodsToInventory()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 8, PosY = 8 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // A construction site needing stone.
+        game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+
+        // The stock flag holds a needed good (stone) in front of an
+        // unneeded one (trunk). The unneeded good must still go to the
+        // inventory instead of staying at the flag forever.
+        var stock = game.Networks[0].StockFlag!;
+        stock.AddGood(Material.Stone);
+        stock.AddGood(Material.Trunk);
+
+        game.TickOnce();
+
+        Assert.AreEqual(1, stock.Count);
+        Assert.IsTrue(stock.Contains(Material.Stone));
+        Assert.AreEqual(1, game.GetPlayer(0)!.Inventory.Get(Material.Trunk));
+    }
+
+    [TestMethod]
     public void ConstructionWaitsForFreeSettler()
     {
         var map = new Map(8);

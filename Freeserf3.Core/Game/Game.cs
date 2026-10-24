@@ -262,7 +262,15 @@ public sealed class Game
             building.Flag = flag;
 
             if (network.StockFlag != null)
-                network.Connect(network.StockFlag, flag, playerIndex, IsWalkable);
+            {
+                var road = network.Connect(network.StockFlag, flag, playerIndex, IsWalkable);
+                if (road != null)
+                {
+                    var roadPlayer = GetPlayer(playerIndex);
+                    if (roadPlayer != null)
+                        road.PriorityFunc = m => GetMaterialPriority(roadPlayer, m);
+                }
+            }
         }
 
         var player = GetPlayer(playerIndex);
@@ -400,7 +408,15 @@ public sealed class Game
                 building.Flag = flag;
 
                 if (network.StockFlag != null)
-                    network.Connect(network.StockFlag, flag, mapBuilding.Party, IsWalkable);
+                {
+                    var road = network.Connect(network.StockFlag, flag, mapBuilding.Party, IsWalkable);
+                    if (road != null)
+                    {
+                        var player = GetPlayer(mapBuilding.Party);
+                        if (player != null)
+                            road.PriorityFunc = m => GetMaterialPriority(player, m);
+                    }
+                }
             }
 
             // The soldiers the map file lists for this building. They are
@@ -1710,6 +1726,22 @@ public sealed class Game
     }
 
     /// <summary>
+    /// The priority of a material for the player's goods distribution:
+    /// 2 = construction material for a construction site, 1 = production
+    /// input for a producer, 0 = everything else. The carriers pick up
+    /// higher-priority goods first so construction sites and production
+    /// chains do not starve.
+    /// </summary>
+    public int GetMaterialPriority(Player player, Material material)
+    {
+        if (IsConstructionMaterialNeeded(player, material))
+            return 2;
+        if (IsInputMaterialNeeded(player, material))
+            return 1;
+        return 0;
+    }
+
+    /// <summary>
     /// Advances the game by one tick. The clock is incremented and all
     /// buildings are simulated (worker assignment and production); produced
     /// goods are queued at the building flags and carried to the player's
@@ -1864,16 +1896,17 @@ public sealed class Game
             if (player == null || stock == null)
                 continue;
 
+            var needed = new List<Material>();
             while (stock.Count > 0)
             {
-                var good = stock.Peek();
+                var good = stock.TakeGood();
                 if (good.HasValue && (IsConstructionMaterialNeeded(player, good.Value) || IsInputMaterialNeeded(player, good.Value)))
-                    break;
-
-                var taken = stock.TakeGood();
-                if (taken.HasValue)
-                    player.Inventory.Add(taken.Value);
+                    needed.Add(good.Value);
+                else if (good.HasValue)
+                    player.Inventory.Add(good.Value);
             }
+            foreach (var material in needed)
+                stock.AddGood(material);
         }
 
         // Construction materials are sent from the player's stock to the

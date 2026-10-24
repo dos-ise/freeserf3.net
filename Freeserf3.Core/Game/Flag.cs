@@ -76,4 +76,36 @@ public sealed class Flag
             Queue.Enqueue(m);
         return material;
     }
+
+    /// <summary>
+    /// Takes the good with the highest priority (ties broken by FIFO
+    /// order), or null if the queue is empty. Used by the carriers so
+    /// construction materials and production inputs are moved before
+    /// other goods.
+    /// </summary>
+    public Material? TakeHighestPriority(Func<Material, int> priority)
+    {
+        if (Queue.Count == 0)
+            return null;
+
+        var list = Queue.ToList();
+        int bestIndex = 0;
+        int bestPriority = priority(list[0]);
+        for (int i = 1; i < list.Count; i++)
+        {
+            int p = priority(list[i]);
+            if (p > bestPriority)
+            {
+                bestPriority = p;
+                bestIndex = i;
+            }
+        }
+
+        var material = list[bestIndex];
+        list.RemoveAt(bestIndex);
+        Queue.Clear();
+        foreach (var m in list)
+            Queue.Enqueue(m);
+        return material;
+    }
 }

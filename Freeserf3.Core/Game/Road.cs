@@ -79,6 +79,14 @@ public sealed class Road
     public bool IsCarrying => Carrier.IsCarrying;
 
     /// <summary>
+    /// Optional function that assigns a priority to each material. The
+    /// carrier picks up the highest-priority good at a flag (construction
+    /// materials before production inputs before other goods); when null,
+    /// goods are picked up in FIFO order.
+    /// </summary>
+    public Func<Material, int>? PriorityFunc { get; set; }
+
+    /// <summary>
     /// Advances the carrier by one tick: it picks up a good at a flag,
     /// walks to the other end, drops the good and turns around. The
     /// carrier only walks when there is a good to transport at either
@@ -95,7 +103,7 @@ public sealed class Road
                 if (Start.Count == 0 && End.Count == 0)
                     return;
 
-                var good = Start.TakeGood();
+                var good = TakeGoodAt(Start);
                 if (good.HasValue)
                     Carrier.PickUp(good.Value);
                 CarrierState = CarrierState.WalkingToEnd;
@@ -131,7 +139,7 @@ public sealed class Road
                 if (End.Count == 0 && Start.Count == 0)
                     return;
 
-                var good2 = End.TakeGood();
+                var good2 = TakeGoodAt(End);
                 if (good2.HasValue)
                     Carrier.PickUp(good2.Value);
                 CarrierState = CarrierState.WalkingToStart;
@@ -161,5 +169,14 @@ public sealed class Road
                 }
                 break;
         }
+    }
+
+    /// <summary>
+    /// Takes the next good from the flag: the highest-priority good when a
+    /// priority function is set, otherwise the first good in the queue.
+    /// </summary>
+    Material? TakeGoodAt(Flag flag)
+    {
+        return PriorityFunc != null ? flag.TakeHighestPriority(PriorityFunc) : flag.TakeGood();
     }
 }
