@@ -269,14 +269,13 @@ public class GameTests : DataTestBase
 
         game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
 
-        // The 3x3 footprint under the building becomes sand (48).
-        for (int dx = -1; dx <= 1; dx++)
-        {
-            for (int dy = -1; dy <= 1; dy++)
-                Assert.AreEqual(48, map.GetCell(4 + dx, 4 + dy).Landscape, $"cell ({4 + dx},{4 + dy})");
-        }
+        // The whole building footprint becomes sand (48).
+        var footprint = BuildingFootprints.For(BuildingType.Lumberjack);
+        Assert.IsTrue(footprint.Count > 9, "lumberjack footprint should be larger than 3x3");
+        foreach (var (dx, dy) in footprint)
+            Assert.AreEqual(48, map.GetCell(4 + dx, 4 + dy).Landscape, $"cell ({4 + dx},{4 + dy})");
         // Cells outside the footprint stay grass.
-        Assert.AreEqual(16, map.GetCell(6, 4).Landscape);
+        Assert.AreEqual(16, map.GetCell(8, 4).Landscape);
     }
 
     [TestMethod]

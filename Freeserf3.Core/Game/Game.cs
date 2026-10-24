@@ -254,7 +254,7 @@ public sealed class Game
     {
         var building = new Building(type, position, playerIndex);
         Buildings.Add(building);
-        SetBuildingGround(position);
+        SetBuildingGround(type, position);
 
         if (playerIndex >= 0 && playerIndex < Networks.Count)
         {
@@ -401,7 +401,7 @@ public sealed class Game
             var building = new Building(type.Value, new Position(mapBuilding.PosX, mapBuilding.PosY), mapBuilding.Party);
             building.MarkActive();
             Buildings.Add(building);
-            SetBuildingGround(building.Position);
+            SetBuildingGround(type.Value, building.Position);
 
             if (mapBuilding.Party >= 0 && mapBuilding.Party < Networks.Count)
             {
@@ -638,24 +638,21 @@ public sealed class Game
     }
 
     /// <summary>
-    /// Replaces the ground under the building's 3x3 footprint with sand
-    /// (like the original game, where buildings stand on a sand
+    /// Replaces the ground under the building's footprint with sand (like
+    /// the original game, where buildings stand on a flattened sand
     /// foundation). The sand stays after the building is demolished.
     /// </summary>
-    public void SetBuildingGround(Position building)
+    public void SetBuildingGround(BuildingType type, Position building)
     {
-        for (int dx = -1; dx <= 1; dx++)
+        foreach (var (dx, dy) in BuildingFootprints.For(type))
         {
-            for (int dy = -1; dy <= 1; dy++)
-            {
-                var pos = new Position(building.X + dx, building.Y + dy);
-                if (!Map.IsInBounds(pos))
-                    continue;
+            var pos = new Position(building.X + dx, building.Y + dy);
+            if (!Map.IsInBounds(pos))
+                continue;
 
-                var cell = Map.GetCell(pos);
-                cell.Landscape = 48; // Sand
-                Map.SetCell(pos, cell);
-            }
+            var cell = Map.GetCell(pos);
+            cell.Landscape = 48; // Sand
+            Map.SetCell(pos, cell);
         }
     }
 
