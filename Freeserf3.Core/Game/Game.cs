@@ -2459,13 +2459,26 @@ public sealed class Game
         }
 
         // Defeat condition: the human player has no buildings and no
-        // settlers left.
+        // settlers left, or an AI player reached the target population.
         if (!IsWon && !IsDefeated)
         {
             var human = GetPlayer(0);
             if (human != null && human.Population <= 0
                 && !Buildings.Any(b => b.Player == 0 && b.State != BuildingState.Destroyed))
+            {
                 IsDefeated = true;
+            }
+            else
+            {
+                for (int i = 1; i < Players.Count; i++)
+                {
+                    if (Players[i].Population >= TargetPopulation)
+                    {
+                        IsDefeated = true;
+                        break;
+                    }
+                }
+            }
         }
     }
 }

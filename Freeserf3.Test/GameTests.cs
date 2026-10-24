@@ -1905,5 +1905,26 @@ public class GameTests : DataTestBase
         Assert.IsTrue(game.IsDefeated, "The human player should be defeated.");
         Assert.IsFalse(game.IsWon);
     }
+
+    [TestMethod]
+    public void HumanLosesWhenAiReachesTargetPopulation()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Players.Add(new MapPlayerInfo { Name = "P1" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // The AI player reaches the target population.
+        game.GetPlayer(1)!.Population = game.TargetPopulation;
+
+        for (int i = 0; i < 700 && !game.IsDefeated; i++)
+            game.TickOnce();
+
+        Assert.IsTrue(game.IsDefeated, "The human should lose when an AI reaches the target population.");
+        Assert.IsFalse(game.IsWon);
+    }
 }
 
