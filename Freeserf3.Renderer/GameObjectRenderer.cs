@@ -683,14 +683,15 @@ public sealed class GameObjectRenderer : IDisposable
     /// <summary>
     /// Adds a settler sprite at the given position. <paramref name="frame"/>
     /// selects the walking animation step (0-10) and <paramref name="direction"/>
-    /// the facing direction of the walking sequence.
+    /// the facing direction of the walking sequence. When
+    /// <paramref name="idle"/> is true the standing frame is used.
     /// </summary>
-    public void AddMovable(Position pos, int height, int playerColor, int frame, Direction direction = Direction.SouthWest)
+    public void AddMovable(Position pos, int height, int playerColor, int frame, Direction direction = Direction.SouthWest, bool idle = false, (float X, float Y)? screenPos = null)
     {
         if (!settlerImages.TryGetValue((playerColor, 0), out var frames) || frames.Length == 0)
             return;
 
-        AddSprite(frames[DirectionFrameIndex(direction, frame)], pos, height, 0.5f, visibleOnly: true);
+        AddSprite(frames[DirectionFrameIndex(direction, frame, idle)], pos, height, 0.5f, visibleOnly: true, screenPos);
     }
 
     /// <summary>
@@ -719,13 +720,13 @@ public sealed class GameObjectRenderer : IDisposable
     /// (stonecutter yellow helmet, lumberjack, forester). The walking
     /// sequences hold 6 directions x 12 frames (72) or 6 x 4 (24).
     /// </summary>
-    public void AddWorkerMovable(Position pos, int height, int playerColor, int frame, Direction direction, WorkerType profession)
+    public void AddWorkerMovable(Position pos, int height, int playerColor, int frame, Direction direction, WorkerType profession, bool idle = false, (float X, float Y)? screenPos = null)
     {
         int sequence = WorkerWalkSequences.TryGetValue(profession, out int s) ? s : 0;
         if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
             return;
 
-        AddSprite(frames[DirectionFrameIndex(direction, frame, frames.Length)], pos, height, 0.5f, visibleOnly: true);
+        AddSprite(frames[DirectionFrameIndex(direction, frame, frames.Length, idle)], pos, height, 0.5f, visibleOnly: true, screenPos);
     }
 
     /// <summary>
@@ -733,7 +734,7 @@ public sealed class GameObjectRenderer : IDisposable
     /// bricklayer working animation from dat file 11 (one sequence per
     /// direction); otherwise it walks like a normal settler.
     /// </summary>
-    public void AddBuilderMovable(Position pos, int height, int playerColor, int frame, Direction direction, bool working)
+    public void AddBuilderMovable(Position pos, int height, int playerColor, int frame, Direction direction, bool working, bool idle = false, (float X, float Y)? screenPos = null)
     {
         if (working)
         {
@@ -742,14 +743,14 @@ public sealed class GameObjectRenderer : IDisposable
                 return;
 
             int index = Math.Clamp(frame, 0, frames.Length - 1);
-            AddSprite(frames[index], pos, height, 0.5f, visibleOnly: true);
+            AddSprite(frames[index], pos, height, 0.5f, visibleOnly: true, screenPos);
             return;
         }
 
         if (!settlerImages.TryGetValue((playerColor, 0), out var walkFrames) || walkFrames.Length == 0)
             return;
 
-        AddSprite(walkFrames[DirectionFrameIndex(direction, frame)], pos, height, 0.5f, visibleOnly: true);
+        AddSprite(walkFrames[DirectionFrameIndex(direction, frame, idle)], pos, height, 0.5f, visibleOnly: true, screenPos);
     }
 
     /// <summary>
@@ -771,35 +772,37 @@ public sealed class GameObjectRenderer : IDisposable
     /// dedicated carrying animation (sequence 1-12, good on the back) that
     /// sequence is used, otherwise the plain walking animation (sequence 0).
     /// </summary>
-    public void AddCarrier(Position pos, int height, int playerColor, int frame, Material? carried, Direction direction = Direction.SouthWest)
+    public void AddCarrier(Position pos, int height, int playerColor, int frame, Material? carried, Direction direction = Direction.SouthWest, bool idle = false, (float X, float Y)? screenPos = null)
     {
         int sequence = carried.HasValue && CarrierSequences.TryGetValue(carried.Value, out int s) ? s : 0;
         if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
             return;
 
-        AddSprite(frames[DirectionFrameIndex(direction, frame)], pos, height, 0.5f, visibleOnly: true);
+        AddSprite(frames[DirectionFrameIndex(direction, frame, idle)], pos, height, 0.5f, visibleOnly: true, screenPos);
     }
 
     /// <summary>
     /// Adds a soldier sprite. The walking sequence depends on the weapon
     /// the soldier carries (sword, spear or bow).
     /// </summary>
-    public void AddSoldier(Position pos, int height, int playerColor, int frame, Material weapon, Direction direction = Direction.SouthWest)
+    public void AddSoldier(Position pos, int height, int playerColor, int frame, Material weapon, Direction direction = Direction.SouthWest, bool idle = false, (float X, float Y)? screenPos = null)
     {
         int sequence = SoldierSequences.TryGetValue(weapon, out int s) ? s : 9;
         if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
             return;
 
-        AddSprite(frames[DirectionFrameIndex(direction, frame)], pos, height, 0.5f, visibleOnly: true);
+        AddSprite(frames[DirectionFrameIndex(direction, frame, idle)], pos, height, 0.5f, visibleOnly: true, screenPos);
     }
 
     /// <summary>
     /// Frame index of the walking animation for the given direction. Each
     /// settler sequence holds 6 directions x 12 frames (1 idle + 11 walk).
     /// </summary>
-    static int DirectionFrameIndex(Direction direction, int frame)
+    static int DirectionFrameIndex(Direction direction, int frame, bool idle = false)
     {
         int offset = ((int)direction + 3) % 6 * 12;
+        if (idle)
+            return offset;
         return offset + 1 + (frame % 11);
     }
 
@@ -809,16 +812,20 @@ public sealed class GameObjectRenderer : IDisposable
     /// 12 (1 idle + 11 walk), 24 frames = 6 directions x 4, anything else
     /// is treated as a flat animation.
     /// </summary>
-    static int DirectionFrameIndex(Direction direction, int frame, int totalFrames)
+    static int DirectionFrameIndex(Direction direction, int frame, int totalFrames, bool idle = false)
     {
         if (totalFrames >= 72)
         {
             int offset = ((int)direction + 3) % 6 * 12;
+            if (idle)
+                return offset;
             return offset + 1 + (frame % 11);
         }
         if (totalFrames >= 24)
         {
             int offset = ((int)direction + 3) % 6 * 4;
+            if (idle)
+                return offset;
             return offset + (frame % 4);
         }
         return frame % totalFrames;
@@ -949,7 +956,7 @@ public sealed class GameObjectRenderer : IDisposable
         sprites.Add(new Sprite(whiteRegion, mapX - 8f, mapY - 8f, 16f, 16f, 0.9f, new Vector4(1f, 0.9f, 0.2f, 0.5f)));
     }
 
-    void AddSprite(in SpriteImage image, Position pos, int height, float z, bool visibleOnly = false)
+    void AddSprite(in SpriteImage image, Position pos, int height, float z, bool visibleOnly = false, (float X, float Y)? screenPos = null)
     {
         if (fog != null)
         {
@@ -968,14 +975,14 @@ public sealed class GameObjectRenderer : IDisposable
             else if (state == FogState.Explored)
             {
                 // Explored cells show a dimmed version of the object.
-                var (mapX, mapY) = MapGeometry.GridToScreen(pos, height);
+                var (mapX, mapY) = screenPos ?? MapGeometry.GridToScreen(pos, height);
                 sprites.Add(new Sprite(image.Region, mapX + image.OffsetX, mapY + image.OffsetY,
                     image.Width, image.Height, z, new Vector4(0.5f, 0.5f, 0.5f, 1f)));
                 return;
             }
         }
 
-        var (mx, my) = MapGeometry.GridToScreen(pos, height);
+        var (mx, my) = screenPos ?? MapGeometry.GridToScreen(pos, height);
         float x = mx + image.OffsetX;
         float y = my + image.OffsetY;
         sprites.Add(image.Region, x, y, image.Width, image.Height, z);

@@ -40,6 +40,12 @@ public abstract class Movable
     /// <summary>Current position on the grid.</summary>
     public Position Position { get; set; }
 
+    /// <summary>
+    /// The position the unit walked from (for smooth rendering between
+    /// cells), or null when it has not moved yet.
+    /// </summary>
+    public Position? PreviousPosition { get; set; }
+
     /// <summary>The direction the unit is currently facing (last movement direction).</summary>
     public Direction Facing { get; set; } = Direction.SouthWest;
 
@@ -55,6 +61,18 @@ public abstract class Movable
     /// <summary>Index of the next path position to walk to.</summary>
     public int PathIndex { get; private set; }
 
+    /// <summary>Ticks per map cell walked (1 = one cell per tick).</summary>
+    public int MoveInterval { get; set; } = 1;
+
+    /// <summary>Ticks spent on the current cell (0..MoveInterval).</summary>
+    public int MoveCounter { get; private set; }
+
+    /// <summary>
+    /// Progress of the walk from the previous to the current cell (0..1).
+    /// Used by the renderer to interpolate the position smoothly.
+    /// </summary>
+    public float MoveProgress => MoveInterval > 0 ? Math.Clamp((float)MoveCounter / MoveInterval, 0f, 1f) : 0f;
+
     /// <summary>Whether the unit is currently walking.</summary>
     public bool IsWalking => State == MovableState.Walking;
 
@@ -66,6 +84,7 @@ public abstract class Movable
     {
         Path = path;
         PathIndex = 0;
+        MoveCounter = 0;
         State = path.Count > 0 ? MovableState.Walking : MovableState.Idle;
     }
 
@@ -74,7 +93,25 @@ public abstract class Movable
     {
         Path = null;
         PathIndex = 0;
+        MoveCounter = 0;
         State = MovableState.Idle;
+    }
+
+    /// <summary>
+    /// Advances the movement by one tick. Returns true when the unit
+    /// should move to the next path cell (MoveInterval ticks elapsed).
+    /// </summary>
+    public bool AdvanceMove()
+    {
+        if (State != MovableState.Walking)
+            return false;
+
+        MoveCounter++;
+        if (MoveCounter < MoveInterval)
+            return false;
+
+        MoveCounter = 0;
+        return true;
     }
 
     /// <summary>Advances one step along the current path.</summary>
@@ -90,6 +127,7 @@ public abstract class Movable
         var direction = Position.GetDirectionTo(next);
         if (direction.HasValue)
             Facing = direction.Value;
+        PreviousPosition = Position;
         Position = next;
         PathIndex++;
 

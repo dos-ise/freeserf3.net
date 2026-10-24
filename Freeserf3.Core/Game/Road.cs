@@ -49,10 +49,11 @@ public sealed class Road
     }
 
     /// <summary>Ticks per map cell walked by the carrier (same as walking settlers).</summary>
-    public int MoveInterval { get; set; } = Serf.DefaultMoveInterval;
-
-    /// <summary>Ticks spent on the current road cell.</summary>
-    int moveCounter;
+    public int MoveInterval
+    {
+        get => Carrier.MoveInterval;
+        set => Carrier.MoveInterval = value;
+    }
 
     /// <summary>The flag the road starts at.</summary>
     public Flag Start { get; }
@@ -106,20 +107,21 @@ public sealed class Road
                 var good = TakeGoodAt(Start);
                 if (good.HasValue)
                     Carrier.PickUp(good.Value);
+                Carrier.State = MovableState.Walking;
                 CarrierState = CarrierState.WalkingToEnd;
                 CarrierPathIndex = 0;
                 break;
 
             case CarrierState.WalkingToEnd:
-                if (++moveCounter < MoveInterval)
+                if (!Carrier.AdvanceMove())
                     break;
-                moveCounter = 0;
                 if (CarrierPathIndex < Path.Count)
                 {
                     var next = Path[CarrierPathIndex];
                     var direction = Carrier.Position.GetDirectionTo(next);
                     if (direction.HasValue)
                         Carrier.Facing = direction.Value;
+                    Carrier.PreviousPosition = Carrier.Position;
                     Carrier.Position = next;
                     CarrierPathIndex++;
                 }
@@ -129,6 +131,7 @@ public sealed class Road
                     if (carried.HasValue)
                         End.AddGood(carried.Value);
                     Carrier.Position = End.Position;
+                    Carrier.State = MovableState.Idle;
                     CarrierState = CarrierState.IdleAtEnd;
                 }
                 break;
@@ -142,20 +145,21 @@ public sealed class Road
                 var good2 = TakeGoodAt(End);
                 if (good2.HasValue)
                     Carrier.PickUp(good2.Value);
+                Carrier.State = MovableState.Walking;
                 CarrierState = CarrierState.WalkingToStart;
                 CarrierPathIndex = Path.Count - 1;
                 break;
 
             case CarrierState.WalkingToStart:
-                if (++moveCounter < MoveInterval)
+                if (!Carrier.AdvanceMove())
                     break;
-                moveCounter = 0;
                 if (CarrierPathIndex >= 0)
                 {
                     var next = Path[CarrierPathIndex];
                     var direction = Carrier.Position.GetDirectionTo(next);
                     if (direction.HasValue)
                         Carrier.Facing = direction.Value;
+                    Carrier.PreviousPosition = Carrier.Position;
                     Carrier.Position = next;
                     CarrierPathIndex--;
                 }
@@ -165,6 +169,7 @@ public sealed class Road
                     if (carried2.HasValue)
                         Start.AddGood(carried2.Value);
                     Carrier.Position = Start.Position;
+                    Carrier.State = MovableState.Idle;
                     CarrierState = CarrierState.IdleAtStart;
                 }
                 break;

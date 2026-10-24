@@ -50,6 +50,34 @@ public class MovableTests
     }
 
     [TestMethod]
+    public void SerfTracksMovementProgress()
+    {
+        var serf = new Serf(0, new Position(0, 0), SerfType.Carrier)
+        {
+            MoveInterval = 10
+        };
+        serf.SetPath(new List<Position> { new(1, 0) });
+
+        // Before moving, no previous position and no progress.
+        Assert.IsNull(serf.PreviousPosition);
+        Assert.AreEqual(0f, serf.MoveProgress);
+
+        // Halfway through the cell the progress is 0.5.
+        for (int i = 0; i < 5; i++)
+            serf.Tick();
+        Assert.AreEqual(0.5f, serf.MoveProgress);
+        Assert.AreEqual(new Position(0, 0), serf.Position);
+
+        // After MoveInterval ticks the settler moves to the next cell and
+        // remembers where it came from.
+        for (int i = 0; i < 5; i++)
+            serf.Tick();
+        Assert.AreEqual(new Position(1, 0), serf.Position);
+        Assert.AreEqual(new Position(0, 0), serf.PreviousPosition);
+        Assert.AreEqual(0f, serf.MoveProgress);
+    }
+
+    [TestMethod]
     public void SerfPicksUpAndDropsGoods()
     {
         var serf = new Serf(0, new Position(0, 0), SerfType.Carrier);

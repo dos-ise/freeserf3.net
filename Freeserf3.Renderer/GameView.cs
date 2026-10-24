@@ -671,20 +671,22 @@ public sealed class GameView : IDisposable
         }
 
         // Settlers walking around the map. The animation frame follows the
-        // game clock (or wall time before the game starts).
-        int frame = (int)((game?.Tick ?? (ulong)Environment.TickCount) / 10) % 8;
+        // settler's own movement (standing frame while idle).
         if (game != null)
         {
             foreach (var settler in game.Settlers)
             {
                 if (!gameMap.IsInBounds(settler.Position))
                     continue;
+                int frame = GetMovableFrame(settler);
+                bool idle = !settler.IsWalking;
+                var screenPos = GetMovableScreenPos(settler);
                 if (settler.Type == SerfType.Collector)
-                    gameObjects.AddCarrier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.CarriedGood, settler.Facing);
+                    gameObjects.AddCarrier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.CarriedGood, settler.Facing, idle, screenPos);
                 else if (settler.Type == SerfType.Soldier)
-                    gameObjects.AddSoldier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Weapon, settler.Facing);
+                    gameObjects.AddSoldier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Weapon, settler.Facing, idle, screenPos);
                 else if (settler.Type == SerfType.Builder)
-                    gameObjects.AddBuilderMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, settler.BuilderState == BuilderState.Building);
+                    gameObjects.AddBuilderMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, settler.BuilderState == BuilderState.Building, idle, screenPos);
                 else if (settler.Type == SerfType.ResourceWorker)
                 {
                     // The worker is inside the house between work cycles.
@@ -695,14 +697,15 @@ public sealed class GameView : IDisposable
                     else if (settler.IsCarrying)
                         gameObjects.AddCarryingMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Profession);
                     else
-                        gameObjects.AddWorkerMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, settler.Profession);
+                        gameObjects.AddWorkerMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, settler.Profession, idle, screenPos);
                 }
                 else
-                    gameObjects.AddMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing);
+                    gameObjects.AddMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, idle, screenPos);
             }
         }
         else
         {
+            int frame = (int)(Environment.TickCount / 10) % 8;
             foreach (var settler in gameMap.Settlers)
             {
                 var pos = new Position(settler.PosX, settler.PosY);
@@ -719,7 +722,10 @@ public sealed class GameView : IDisposable
             {
                 if (!gameMap.IsInBounds(carrier.Position))
                     continue;
-                gameObjects.AddCarrier(carrier.Position, gameMap.GetCell(carrier.Position).Height, carrier.Player, frame, carrier.CarriedGood, carrier.Facing);
+                int frame = GetMovableFrame(carrier);
+                bool idle = !carrier.IsWalking;
+                var screenPos = GetMovableScreenPos(carrier);
+                gameObjects.AddCarrier(carrier.Position, gameMap.GetCell(carrier.Position).Height, carrier.Player, frame, carrier.CarriedGood, carrier.Facing, idle, screenPos);
                 if (carrier.IsCarrying && carrier.CarriedGood.HasValue && !GameObjectRenderer.CarrierSequences.ContainsKey(carrier.CarriedGood.Value))
                     gameObjects.AddCarriedGood(carrier.Position, gameMap.GetCell(carrier.Position).Height, carrier.CarriedGood.Value);
             }
@@ -880,6 +886,33 @@ public sealed class GameView : IDisposable
         float mapX = (mousePos.X - screenWidth / 2f) / zoom - cameraOffset.X;
         float mapY = (mousePos.Y - screenHeight / 2f) / zoom - cameraOffset.Y;
         return MapGeometry.ScreenToGrid(mapX, mapY);
+    }
+
+    /// <summary>
+    /// The screen position of a movable, interpolated between the previous
+    /// and the current cell while it walks (smooth movement instead of
+    /// cell-to-cell jumps).
+    /// </summary>
+    (float X, float Y) GetMovableScreenPos(Serf settler)
+    {
+        if (settler.IsWalking && settler.PreviousPosition is Position prev)
+        {
+            float t = settler.MoveProgress;
+            var curr = settler.Position;
+            var (px, py) = MapGeometry.GridToScreen(prev, gameMap!.GetCell(prev).Height);
+            var (cx, cy) = MapGeometry.GridToScreen(curr, gameMap.GetCell(curr).Height);
+            return (px + (cx - px) * t, py + (cy - py) * t);
+        }
+        return MapGeometry.GridToScreen(settler.Position, gameMap!.GetCell(settler.Position).Height);
+    }
+
+    /// <summary>
+    /// The animation frame of a movable: advances while walking, standing
+    /// frame (0) while idle.
+    /// </summary>
+    static int GetMovableFrame(Serf settler)
+    {
+        return settler.IsWalking ? (int)(settler.MoveProgress * 11) % 11 : 0;
     }
 
     /// <summary>Selects the building at the given position, if any.</summary>
