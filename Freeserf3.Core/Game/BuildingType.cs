@@ -91,5 +91,11 @@ public enum WorkerType
     CharcoalBurner,
     DonkeyFarmer,
     Healer,
-    Dockworker
+    Dockworker,
+    Brewer,
+    RiceFarmer,
+    Beekeeper,
+    Distiller,
+    Alchemist,
+    MeadBrewer
 }

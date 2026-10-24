@@ -400,6 +400,167 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void MineProducesFromMapResource()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        SetGrass(map);
+
+        // Add an iron ore deposit near the mine (type 2 = iron).
+        var orePos = new Position(6, 6);
+        var cell = map.GetCell(orePos);
+        cell.ResourceType1 = 2; // iron
+        cell.ResourceType2 = 5; // amount
+        map.SetCell(orePos, cell);
+
+        var game = new Game(map, 42);
+        game.StartGame();
+        Assert.IsTrue(game.MapResources.ContainsKey(orePos));
+
+        var mine = game.PlaceBuilding(BuildingType.Ironmine, new Position(4, 4), 0);
+        for (int i = 0; i < 5000 && game.GetPlayer(0)!.Inventory.Get(Material.IronOre) == 0; i++)
+            game.TickOnce();
+
+        // The produced ore is carried to the player's stock.
+        Assert.IsTrue(game.GetPlayer(0)!.Inventory.Get(Material.IronOre) > 0, "Mine should have produced iron ore");
+        // One unit of ore was consumed from the deposit.
+        Assert.AreEqual(4, game.MapResources[orePos]);
+    }
+
+    [TestMethod]
+    public void MineStopsWithoutMapResource()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // No ore on the map: the mine never produces.
+        var mine = game.PlaceBuilding(BuildingType.Ironmine, new Position(4, 4), 0);
+        for (int i = 0; i < 5000; i++)
+            game.TickOnce();
+
+        Assert.AreEqual(BuildingState.Active, mine.State);
+        Assert.AreEqual(0, game.GetPlayer(0)!.Inventory.Get(Material.IronOre));
+    }
+
+    [TestMethod]
+    public void MineExhaustsMapResource()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        SetGrass(map);
+
+        // A small deposit (2 units) so the mine runs out quickly.
+        var orePos = new Position(6, 6);
+        var cell = map.GetCell(orePos);
+        cell.ResourceType1 = 2; // iron
+        cell.ResourceType2 = 2; // amount
+        map.SetCell(orePos, cell);
+
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var mine = game.PlaceBuilding(BuildingType.Ironmine, new Position(4, 4), 0);
+        for (int i = 0; i < 20000; i++)
+            game.TickOnce();
+
+        // The deposit is exhausted and the mine stopped producing.
+        Assert.IsFalse(game.MapResources.ContainsKey(orePos));
+        Assert.AreEqual(2, game.GetPlayer(0)!.Inventory.Get(Material.IronOre));
+    }
+
+    [TestMethod]
+    public void FarmProducesOnFertileGround()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var farm = game.PlaceBuilding(BuildingType.Farm, new Position(4, 4), 0);
+        for (int i = 0; i < 5000 && game.GetPlayer(0)!.Inventory.Get(Material.Crop) == 0; i++)
+            game.TickOnce();
+
+        Assert.IsTrue(game.GetPlayer(0)!.Inventory.Get(Material.Crop) > 0, "Farm should have produced crop on grass");
+    }
+
+    [TestMethod]
+    public void FarmDoesNotProduceWithoutFertileGround()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var farm = game.PlaceBuilding(BuildingType.Farm, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, farm.State);
+
+        // Remove all fertile ground in the work radius: the farm stops.
+        for (int y = 0; y < 12; y++)
+        {
+            for (int x = 0; x < 12; x++)
+            {
+                var cell = map.GetCell(x, y);
+                cell.Landscape = 0; // Water1
+                map.SetCell(x, y, cell);
+            }
+        }
+
+        int cropBefore = game.GetPlayer(0)!.Inventory.Get(Material.Crop);
+        for (int i = 0; i < 5000; i++)
+            game.TickOnce();
+
+        Assert.AreEqual(cropBefore, game.GetPlayer(0)!.Inventory.Get(Material.Crop));
+    }
+
+    [TestMethod]
+    public void FisherProducesNearWater()
+    {
+        var map = new Map(12);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        SetGrass(map);
+        // Water near the fisher's work area.
+        for (int y = 0; y < 12; y++)
+        {
+            for (int x = 0; x < 12; x++)
+            {
+                if (x >= 8)
+                {
+                    var cell = map.GetCell(x, y);
+                    cell.Landscape = 0; // Water1
+                    map.SetCell(x, y, cell);
+                }
+            }
+        }
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var fisher = game.PlaceBuilding(BuildingType.Fisher, new Position(4, 4), 0);
+        for (int i = 0; i < 5000 && game.GetPlayer(0)!.Inventory.Get(Material.Fish) == 0; i++)
+            game.TickOnce();
+
+        Assert.IsTrue(game.GetPlayer(0)!.Inventory.Get(Material.Fish) > 0, "Fisher should have produced fish near water");
+    }
+
+    [TestMethod]
     public void ForesterPlantsTree()
     {
         var map = new Map(12);

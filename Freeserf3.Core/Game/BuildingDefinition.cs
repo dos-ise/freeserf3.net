@@ -180,31 +180,31 @@ public sealed class BuildingDefinition
         Add(new BuildingDefinition(BuildingType.Coalmine, WorkerType.Miner,
             new[] { (Material.Plank, 4), (Material.Stone, 1) },
             inputs: new[] { Material.Bread, Material.Meat, Material.Fish },
-            output: Material.Coal, isMine: true, productionTime: 1200,
+            output: Material.Coal, isMine: true, workRadius: 3, productionTime: 1200,
             tool: Material.Pick));
 
         Add(new BuildingDefinition(BuildingType.Ironmine, WorkerType.Miner,
             new[] { (Material.Plank, 4), (Material.Stone, 1) },
             inputs: new[] { Material.Bread, Material.Meat, Material.Fish },
-            output: Material.IronOre, isMine: true, productionTime: 1200,
+            output: Material.IronOre, isMine: true, workRadius: 3, productionTime: 1200,
             tool: Material.Pick));
 
         Add(new BuildingDefinition(BuildingType.Goldmine, WorkerType.Miner,
             new[] { (Material.Plank, 5), (Material.Stone, 1) },
             inputs: new[] { Material.Bread, Material.Meat, Material.Fish },
-            output: Material.GoldOre, isMine: true, productionTime: 1200,
+            output: Material.GoldOre, isMine: true, workRadius: 3, productionTime: 1200,
             tool: Material.Pick));
 
         Add(new BuildingDefinition(BuildingType.Sulfurmine, WorkerType.Miner,
             new[] { (Material.Plank, 3), (Material.Stone, 2) },
             inputs: new[] { Material.Bread, Material.Meat, Material.Fish },
-            output: Material.Sulfur, isMine: true, productionTime: 1200,
+            output: Material.Sulfur, isMine: true, workRadius: 3, productionTime: 1200,
             tool: Material.Pick));
 
         Add(new BuildingDefinition(BuildingType.Gemsmine, WorkerType.Miner,
             new[] { (Material.Plank, 3), (Material.Stone, 2) },
             inputs: new[] { Material.Bread, Material.Meat, Material.Fish },
-            output: Material.Gems, isMine: true, productionTime: 1200,
+            output: Material.Gems, isMine: true, workRadius: 3, productionTime: 1200,
             tool: Material.Pick));
 
         // --- Melts and smiths ---
@@ -272,30 +272,30 @@ public sealed class BuildingDefinition
             inputs: new[] { Material.Crop, Material.Water }, productionTime: 1200));
 
         // --- Civilisation-specific production ---
-        Add(new BuildingDefinition(BuildingType.Brewery, WorkerType.None,
+        Add(new BuildingDefinition(BuildingType.Brewery, WorkerType.Brewer,
             new[] { (Material.Stone, 5), (Material.Plank, 2) },
             inputs: new[] { Material.Crop, Material.Water }, output: Material.Keg,
             productionTime: 1200));
 
-        Add(new BuildingDefinition(BuildingType.RiceFarm, WorkerType.None,
+        Add(new BuildingDefinition(BuildingType.RiceFarm, WorkerType.RiceFarmer,
             new[] { (Material.Stone, 3), (Material.Plank, 9) },
             output: Material.Rice, workRadius: 6, productionTime: 1200));
 
-        Add(new BuildingDefinition(BuildingType.Distillery, WorkerType.None,
+        Add(new BuildingDefinition(BuildingType.Distillery, WorkerType.Distiller,
             new[] { (Material.Plank, 4), (Material.Stone, 3) },
             inputs: new[] { Material.Rice, Material.Coal }, output: Material.Liquor,
             productionTime: 1200));
 
-        Add(new BuildingDefinition(BuildingType.Beekeeping, WorkerType.None,
+        Add(new BuildingDefinition(BuildingType.Beekeeping, WorkerType.Beekeeper,
             new[] { (Material.Plank, 6), (Material.Stone, 1) },
             output: Material.Honey, productionTime: 1200));
 
-        Add(new BuildingDefinition(BuildingType.MeadBrewery, WorkerType.None,
+        Add(new BuildingDefinition(BuildingType.MeadBrewery, WorkerType.MeadBrewer,
             new[] { (Material.Stone, 4), (Material.Plank, 6) },
             inputs: new[] { Material.Water, Material.Honey }, output: Material.Mead,
             productionTime: 1200));
 
-        Add(new BuildingDefinition(BuildingType.Laboratory, WorkerType.None,
+        Add(new BuildingDefinition(BuildingType.Laboratory, WorkerType.Alchemist,
             new[] { (Material.Plank, 5), (Material.Stone, 1) },
             inputs: new[] { Material.Sulfur, Material.Gems }, output: Material.Iron,
             productionTime: 1500));

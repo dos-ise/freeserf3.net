@@ -65,6 +65,13 @@ public sealed class Game
     /// <summary>Positions of the stones still on the map.</summary>
     public HashSet<Position> Stones { get; } = new();
 
+    /// <summary>
+    /// The minable resources on the map (coal, iron, gold, gems, sulfur),
+    /// keyed by position. The value is the remaining amount (like
+    /// settlers-remake LandscapeGrid resourceAmount).
+    /// </summary>
+    public Dictionary<Position, int> MapResources { get; } = new();
+
     /// <summary>The transport network of each player (index = player index).</summary>
     public List<TransportNetwork> Networks { get; } = new();
 
@@ -170,15 +177,24 @@ public sealed class Game
         // Track the trees and stones on the map so they can be cut/mined.
         Trees.Clear();
         Stones.Clear();
+        MapResources.Clear();
         for (int y = 0; y < Map.Size; y++)
         {
             for (int x = 0; x < Map.Size; x++)
             {
-                byte mapObject = Map.GetCell(x, y).MapObject;
+                var cell = Map.GetCell(x, y);
+                byte mapObject = cell.MapObject;
                 if (IsTreeObject(mapObject))
                     Trees.Add(new Position(x, y));
                 else if (IsStoneObject(mapObject))
                     Stones.Add(new Position(x, y));
+
+                // The minable resources (coal, iron, gold, gems, sulfur)
+                // are stored per cell: ResourceType1 is the type, the
+                // amount is the low nibble (like settlers-remake
+                // EOriginalMapResources).
+                if (cell.ResourceType1 is >= 1 and <= 5 && cell.ResourceType2 > 0)
+                    MapResources[new Position(x, y)] = cell.ResourceType2;
             }
         }
 
@@ -557,6 +573,116 @@ public sealed class Game
     {
         Stones.Remove(position);
         PlaySound?.Invoke(3); // stonecutter
+    }
+
+    /// <summary>
+    /// The map resource type a mine produces (1 = coal, 2 = iron, 3 = gold,
+    /// 4 = gems, 5 = sulfur, like settlers-remake EOriginalMapResources).
+    /// Returns 0 for buildings that are not mines.
+    /// </summary>
+    static int MineResourceType(Building building)
+    {
+        return building.Type switch
+        {
+            BuildingType.Coalmine => 1,
+            BuildingType.Ironmine => 2,
+            BuildingType.Goldmine => 3,
+            BuildingType.Gemsmine => 4,
+            BuildingType.Sulfurmine => 5,
+            _ => 0
+        };
+    }
+
+    /// <summary>
+    /// Whether there is still ore of the mine's type in its work radius.
+    /// The mine stops producing when its ore is exhausted (like
+    /// settlers-remake MineBuilding.tryTakingResource).
+    /// </summary>
+    bool HasMineResource(Building building)
+    {
+        int type = MineResourceType(building);
+        if (type == 0)
+            return true;
+
+        int radius = building.Definition.WorkRadius;
+        foreach (var (position, amount) in MapResources)
+        {
+            if (amount <= 0)
+                continue;
+            if (Map.GetCell(position).ResourceType1 != type)
+                continue;
+            if (MapGeometry.GetDistance(building.Position, position) > radius)
+                continue;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Consumes one unit of ore from the mine's work radius. Called when a
+    /// mine completes a production cycle.
+    /// </summary>
+    void ConsumeMineResource(Building building)
+    {
+        int type = MineResourceType(building);
+        if (type == 0)
+            return;
+
+        int radius = building.Definition.WorkRadius;
+        foreach (var (position, amount) in MapResources)
+        {
+            if (amount <= 0)
+                continue;
+            if (Map.GetCell(position).ResourceType1 != type)
+                continue;
+            if (MapGeometry.GetDistance(building.Position, position) > radius)
+                continue;
+
+            MapResources[position] = amount - 1;
+            if (MapResources[position] <= 0)
+                MapResources.Remove(position);
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Whether there is a cell matching the given predicate within the
+    /// building's work radius. Used by farms (fertile ground) and fishers
+    /// (water) so they only produce where their work area is usable (like
+    /// settlers-remake FarmConstructionPositionFinder and
+    /// FisherConstructionPositionFinder).
+    /// </summary>
+    bool HasWorkAreaResource(Building building, Func<Position, bool> predicate)
+    {
+        int radius = building.Definition.WorkRadius;
+        for (int dy = -radius; dy <= radius; dy++)
+        {
+            for (int dx = -radius; dx <= radius; dx++)
+            {
+                var pos = new Position(building.Position.X + dx, building.Position.Y + dy);
+                if (!Map.IsInBounds(pos))
+                    continue;
+                if (MapGeometry.GetDistance(building.Position, pos) > radius)
+                    continue;
+                if (predicate(pos))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Whether the cell is fertile ground (grass) for a farm.</summary>
+    bool IsFertile(Position pos)
+    {
+        var landscape = LandscapeMapping.FromMapValue(Map.GetCell(pos).Landscape);
+        return landscape == LandscapeType.Grass;
+    }
+
+    /// <summary>Whether the cell is water (sea or river) for a fisher.</summary>
+    bool IsWater(Position pos)
+    {
+        var landscape = LandscapeMapping.FromMapValue(Map.GetCell(pos).Landscape);
+        return landscape.HasValue && LandscapeMapping.IsWater(landscape.Value);
     }
 
     /// <summary>Plants a new tree on the map (forester).</summary>
@@ -1231,7 +1357,29 @@ public sealed class Game
                 }
             }
 
-            building.Tick();
+            // Mines only produce while there is still ore in their work
+            // radius; without ore the production stops (like
+            // settlers-remake MineBuilding.tryTakingResource). Farms need
+            // fertile ground and fishers need water in their work area.
+            if (building.Definition.IsMine && !HasMineResource(building))
+            {
+                building.ResetProduction();
+            }
+            else if (building.Type == BuildingType.Farm && !HasWorkAreaResource(building, IsFertile))
+            {
+                building.ResetProduction();
+            }
+            else if (building.Type == BuildingType.Fisher && !HasWorkAreaResource(building, IsWater))
+            {
+                building.ResetProduction();
+            }
+            else
+            {
+                int outputBefore = building.Output.TotalCount;
+                building.Tick();
+                if (building.Definition.IsMine && building.Output.TotalCount > outputBefore)
+                    ConsumeMineResource(building);
+            }
 
             // A finished building gets a worker from the free settlers. The
             // worker needs the required tool in the player's stock; without

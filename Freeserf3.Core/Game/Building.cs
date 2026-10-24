@@ -117,6 +117,19 @@ public sealed class Building
             if (!Definition.IsProducer)
                 return false;
 
+            // Mines eat one unit of food per production cycle; any one of
+            // the food types is enough (like settlers-remake
+            // MineBuilding.tryTakingFood).
+            if (Definition.IsMine)
+            {
+                foreach (var input in Definition.Inputs)
+                {
+                    if (Input.Get(input) > 0)
+                        return true;
+                }
+                return false;
+            }
+
             foreach (var input in Definition.Inputs)
             {
                 if (Input.Get(input) <= 0)
@@ -159,6 +172,12 @@ public sealed class Building
     public void RemoveWorker()
     {
         Worker = WorkerType.None;
+        ProductionProgress = 0;
+    }
+
+    /// <summary>Resets the production progress (used when a mine runs out of ore).</summary>
+    public void ResetProduction()
+    {
         ProductionProgress = 0;
     }
 
@@ -237,9 +256,24 @@ public sealed class Building
 
     void CompleteProduction()
     {
-        // Consume the inputs.
-        foreach (var input in Definition.Inputs)
-            Input.Remove(input);
+        // Consume the inputs. Mines eat one unit of food per cycle (any
+        // food type), other producers consume all their inputs.
+        if (Definition.IsMine)
+        {
+            foreach (var input in Definition.Inputs)
+            {
+                if (Input.Get(input) > 0)
+                {
+                    Input.Remove(input);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            foreach (var input in Definition.Inputs)
+                Input.Remove(input);
+        }
 
         // Produce the output. The toolsmith produces the configured tool
         // instead of its default output.
