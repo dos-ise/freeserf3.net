@@ -740,6 +740,68 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void RecruitedSoldiersAreVisibleOnMap()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 3, PosY = 3 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 4, PosY = 4 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var tower = game.PlaceBuilding(BuildingType.Tower, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, tower.State);
+
+        // The recruited soldiers are real serfs on the map.
+        Assert.IsTrue(tower.Soldiers.Count > 0);
+        int visibleSoldiers = game.Settlers.Count(s => s.Type == SerfType.Soldier);
+        Assert.AreEqual(tower.Soldiers.Count, visibleSoldiers);
+        Assert.IsTrue(tower.Soldiers.All(s => s.Barracks == tower));
+    }
+
+    [TestMethod]
+    public void SoldiersPatrolAroundBuilding()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 2, PosY = 1 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 3, PosY = 3 });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 4, PosY = 4 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var tower = game.PlaceBuilding(BuildingType.Tower, new Position(8, 8), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, tower.State);
+        Assert.IsTrue(tower.Soldiers.Count > 0);
+
+        // Let the soldiers patrol for a while; they should move away from
+        // the building and come back.
+        var soldier = tower.Soldiers[0];
+        var start = soldier.Position;
+        bool moved = false;
+        for (int i = 0; i < 2000; i++)
+        {
+            game.TickOnce();
+            if (soldier.Position != start)
+            {
+                moved = true;
+                break;
+            }
+        }
+
+        Assert.IsTrue(moved, "Soldier should have moved away from the building");
+    }
+
+    [TestMethod]
     public void DemolishRemovesFlagFromNetwork()
     {
         var map = new Map(8);

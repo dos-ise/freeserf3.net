@@ -323,9 +323,12 @@ public sealed class Game
                 ReleaseBuilder(Builders[i]);
         }
 
-        // Release the soldiers stationed in the building.
+        // Release the soldiers stationed in the building. They are real
+        // serfs on the map, so they are removed from the settler list too.
         if (player != null)
             player.FreeSettlers += building.Soldiers.Count;
+        foreach (var soldier in building.Soldiers)
+            Settlers.Remove(soldier);
         building.Soldiers.Clear();
 
         // Remove the building's flag from the transport network.
@@ -400,12 +403,23 @@ public sealed class Game
                     network.Connect(flag, network.StockFlag, mapBuilding.Party, IsWalkable);
             }
 
-            // The soldiers the map file lists for this building.
+            // The soldiers the map file lists for this building. They are
+            // real serfs on the map, visible and patrolling.
             int soldiers = mapBuilding.CountSword1 + mapBuilding.CountSword2 + mapBuilding.CountSword3
                 + mapBuilding.CountArcher1 + mapBuilding.CountArcher2 + mapBuilding.CountArcher3
                 + mapBuilding.CountSpear1 + mapBuilding.CountSpear2 + mapBuilding.CountSpear3;
             for (int i = 0; i < soldiers && building.HasSoldierCapacity; i++)
-                building.Soldiers.Add(new Serf(mapBuilding.Party, building.Position, SerfType.Soldier));
+            {
+                var soldier = new Serf(mapBuilding.Party, building.Position, SerfType.Soldier)
+                {
+                    Barracks = building,
+                    Weapon = Material.Sword,
+                    SoldierState = SoldierState.Idle,
+                    MoveInterval = 4
+                };
+                building.Soldiers.Add(soldier);
+                Settlers.Add(soldier);
+            }
         }
     }
 
@@ -1027,7 +1041,8 @@ public sealed class Game
     {
         // Soldier recruitment: an active military building with free
         // capacity takes a free settler and a weapon from the player's
-        // stock and stations the soldier in the building.
+        // stock and stations the soldier in the building. The soldier is a
+        // real serf on the map, visible and patrolling around the building.
         foreach (var building in Buildings)
         {
             if (building.State != BuildingState.Active || !building.Definition.IsMilitary)
@@ -1046,8 +1061,20 @@ public sealed class Game
             player.Inventory.Remove(weapon);
             player.FreeSettlers--;
 
-            building.Soldiers.Add(new Serf(building.Player, building.Position, SerfType.Soldier));
+            var start = building.Flag?.Position ?? building.Position;
+            var soldier = new Serf(building.Player, start, SerfType.Soldier)
+            {
+                Barracks = building,
+                Weapon = weapon,
+                SoldierState = SoldierState.Idle,
+                MoveInterval = 4
+            };
+            building.Soldiers.Add(soldier);
+            Settlers.Add(soldier);
         }
+
+        // Soldiers patrol around their building.
+        TickSoldierPatrol();
 
         // Tower attacks: military buildings with soldiers shoot at enemy
         // settlers in range (checked every 30 ticks).
@@ -1071,6 +1098,86 @@ public sealed class Game
             Builders.Remove(target);
             ResourceWorkers.Remove(target);
         }
+    }
+
+    /// <summary>
+    /// Advances the soldiers: they patrol around their building and walk
+    /// back when they have wandered too far.
+    /// </summary>
+    void TickSoldierPatrol()
+    {
+        foreach (var soldier in Settlers)
+        {
+            if (soldier.Type != SerfType.Soldier)
+                continue;
+            if (soldier.Barracks == null || soldier.Barracks.State != BuildingState.Active)
+                continue;
+
+            switch (soldier.SoldierState)
+            {
+                case SoldierState.Idle:
+                    soldier.SoldierIdleTicks++;
+                    if (soldier.SoldierIdleTicks < 60)
+                        break;
+
+                    // Walk to a random point near the building.
+                    soldier.SoldierIdleTicks = 0;
+                    var target = FindPatrolPoint(soldier.Barracks.Position);
+                    if (target.HasValue)
+                    {
+                        var path = Pathfinder.FindPath(Map, soldier.Position, target.Value, IsWalkable);
+                        if (path != null && path.Count > 0)
+                        {
+                            soldier.SetPath(path);
+                            soldier.SoldierState = SoldierState.Patrolling;
+                        }
+                    }
+                    break;
+
+                case SoldierState.Patrolling:
+                    soldier.Tick();
+                    if (soldier.State == MovableState.Idle)
+                    {
+                        // Walk back to the building's flag.
+                        var home = soldier.Barracks.Flag?.Position ?? soldier.Barracks.Position;
+                        var homePath = Pathfinder.FindPath(Map, soldier.Position, home, IsWalkable);
+                        if (homePath != null && homePath.Count > 0)
+                        {
+                            soldier.SetPath(homePath);
+                            soldier.SoldierState = SoldierState.Returning;
+                        }
+                        else
+                        {
+                            soldier.SoldierState = SoldierState.Idle;
+                        }
+                    }
+                    break;
+
+                case SoldierState.Returning:
+                    soldier.Tick();
+                    if (soldier.State == MovableState.Idle)
+                        soldier.SoldierState = SoldierState.Idle;
+                    break;
+            }
+        }
+    }
+
+    /// <summary>Finds a random walkable point near the given position.</summary>
+    Position? FindPatrolPoint(Position center)
+    {
+        for (int attempt = 0; attempt < 12; attempt++)
+        {
+            int dx = Random.Next(-6, 7);
+            int dy = Random.Next(-6, 7);
+            if (dx == 0 && dy == 0)
+                continue;
+
+            var pos = new Position(center.X + dx, center.Y + dy);
+            if (!Map.IsInBounds(pos) || !IsWalkable(Map, pos))
+                continue;
+            return pos;
+        }
+        return null;
     }
 
     /// <summary>
@@ -1738,7 +1845,7 @@ public sealed class Game
         // machines.
         foreach (var settler in Settlers)
         {
-            if (settler.Type is SerfType.Collector or SerfType.Builder or SerfType.ResourceWorker)
+            if (settler.Type is SerfType.Collector or SerfType.Builder or SerfType.ResourceWorker or SerfType.Soldier)
                 continue;
             settler.Tick();
         }

@@ -76,6 +76,19 @@ public enum ResourceWorkerState
     Pausing
 }
 
+/// <summary>The states of a soldier.</summary>
+public enum SoldierState
+{
+    /// <summary>Standing at the building, waiting.</summary>
+    Idle,
+
+    /// <summary>Walking to a patrol point.</summary>
+    Patrolling,
+
+    /// <summary>Walking back to the building.</summary>
+    Returning
+}
+
 /// <summary>
 /// A settler on the map. Carries goods, walks along paths and works in
 /// buildings.
@@ -120,6 +133,18 @@ public sealed class Serf : Movable
 
     /// <summary>Ticks spent on the current cut/mine action.</summary>
     public int WorkTicks { get; set; }
+
+    /// <summary>Soldier state (only used by soldiers).</summary>
+    public SoldierState SoldierState { get; set; } = SoldierState.Idle;
+
+    /// <summary>The military building the soldier is stationed in.</summary>
+    public Building? Barracks { get; set; }
+
+    /// <summary>The weapon the soldier carries (sword, spear or bow).</summary>
+    public Material Weapon { get; set; } = Material.Sword;
+
+    /// <summary>Ticks spent idle at the building.</summary>
+    public int SoldierIdleTicks { get; set; }
 
     /// <summary>The good currently carried, or null.</summary>
     public Material? CarriedGood { get; set; }

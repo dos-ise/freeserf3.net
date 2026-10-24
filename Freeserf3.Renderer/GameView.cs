@@ -657,6 +657,8 @@ public sealed class GameView : IDisposable
                     continue;
                 if (settler.Type == SerfType.Collector)
                     gameObjects.AddCarrier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.CarriedGood, settler.Facing);
+                else if (settler.Type == SerfType.Soldier)
+                    gameObjects.AddSoldier(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Weapon, settler.Facing);
                 else if (settler.Type == SerfType.ResourceWorker && settler.ResourceState == ResourceWorkerState.Working)
                     gameObjects.AddWorkingMovable(settler.Position, gameMap.GetCell(settler.Position).Height, settler.Player, frame, settler.Facing, settler.Profession);
                 else

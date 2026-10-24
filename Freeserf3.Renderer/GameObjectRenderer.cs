@@ -83,6 +83,18 @@ public sealed class GameObjectRenderer : IDisposable
     /// <summary>Forester working sequence (ACTION1) in the settler file (from settlers-remake movables.txt).</summary>
     public const int ForesterWorkSequence = 36;
 
+    /// <summary>
+    /// Soldier walking sequences per weapon in the settler file (from
+    /// settlers-remake movables-ROMAN.txt): swordsman L1 = 9, pikeman L1
+    /// = 15, bowman L1 = 21.
+    /// </summary>
+    public static readonly Dictionary<Material, int> SoldierSequences = new()
+    {
+        [Material.Sword] = 9,
+        [Material.Spear] = 15,
+        [Material.Bow] = 21
+    };
+
     /// <summary>Stack sprite sequence per material in the objects file (from settlers-remake EMaterialType).</summary>
     public static readonly Dictionary<Material, int> StackSequences = new()
     {
@@ -289,6 +301,29 @@ public sealed class GameObjectRenderer : IDisposable
         // movables.txt): stonecutter ACTION1 = 25, lumberjack ACTION1 = 30,
         // forester ACTION1 = 36.
         foreach (int sequence in new[] { StonecutterWorkSequence, LumberjackWorkSequence, ForesterWorkSequence })
+        {
+            var frames = settlers.GetSettlerSequence(sequence);
+            if (frames.Length == 0)
+                continue;
+
+            var torsos = settlers.GetSettlerTorsoSequence(sequence);
+            var shadows = settlers.GetSettlerShadowSequence(sequence);
+
+            foreach (int color in colors)
+            {
+                var images = new SpriteImage[frames.Length];
+                for (int i = 0; i < frames.Length; i++)
+                {
+                    var torso = i < torsos.Length ? torsos[i] : null;
+                    var shadow = i < shadows.Length ? shadows[i] : null;
+                    images[i] = AddToAtlas(CombineSettler(frames[i], torso, shadow, PlayerColors[color]));
+                }
+                settlerImages[(color, sequence)] = images;
+            }
+        }
+
+        // Soldier walking sequences (swordsman, pikeman, bowman).
+        foreach (int sequence in SoldierSequences.Values.Distinct())
         {
             var frames = settlers.GetSettlerSequence(sequence);
             if (frames.Length == 0)
@@ -603,6 +638,19 @@ public sealed class GameObjectRenderer : IDisposable
     public void AddCarrier(Position pos, int height, int playerColor, int frame, Material? carried, Direction direction = Direction.SouthWest)
     {
         int sequence = carried.HasValue && CarrierSequences.TryGetValue(carried.Value, out int s) ? s : 0;
+        if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
+            return;
+
+        AddSprite(frames[DirectionFrameIndex(direction, frame)], pos, height, 0.5f, visibleOnly: true);
+    }
+
+    /// <summary>
+    /// Adds a soldier sprite. The walking sequence depends on the weapon
+    /// the soldier carries (sword, spear or bow).
+    /// </summary>
+    public void AddSoldier(Position pos, int height, int playerColor, int frame, Material weapon, Direction direction = Direction.SouthWest)
+    {
+        int sequence = SoldierSequences.TryGetValue(weapon, out int s) ? s : 9;
         if (!settlerImages.TryGetValue((playerColor, sequence), out var frames) || frames.Length == 0)
             return;
 
