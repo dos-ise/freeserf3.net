@@ -77,6 +77,9 @@ public sealed class AiPlayer
         int lumberjacks = Count(BuildingType.Lumberjack);
         int sawmills = Count(BuildingType.Sawmill);
         int farms = Count(BuildingType.Farm);
+        int mills = Count(BuildingType.Mill);
+        int bakers = Count(BuildingType.Baker);
+        int fishers = Count(BuildingType.Fisher);
         int towers = Count(BuildingType.Tower);
         int stonecutters = Count(BuildingType.Stonecutter);
         int livingHouses = CountLivingHouses();
@@ -97,6 +100,13 @@ public sealed class AiPlayer
         if (towers < 2) return BuildingType.Tower;
         if (stonecutters == 0) return BuildingType.Stonecutter;
         if (livingHouses < 4) return BuildingType.SmallLivinghouse;
+
+        // Food production chain: flour and bread from the farm's crop.
+        if (mills == 0) return BuildingType.Mill;
+        if (bakers == 0) return BuildingType.Baker;
+        if (fishers == 0) return BuildingType.Fisher;
+        if (mills < 2) return BuildingType.Mill;
+        if (bakers < 2) return BuildingType.Baker;
 
         // Military production chain: iron and coal for weapons.
         if (ironmines == 0) return BuildingType.Ironmine;
