@@ -409,7 +409,7 @@ public sealed class GameView : IDisposable
     /// <summary>Zooms the camera by the given factor (clamped).</summary>
     public void Zoom(float factor)
     {
-        zoom = Math.Clamp(zoom * factor, 0.1f, 4.0f);
+        zoom = Math.Clamp(zoom * factor, 0.5f, 4.0f);
     }
 
     /// <summary>Updates the pointer position (used for the building preview).</summary>
