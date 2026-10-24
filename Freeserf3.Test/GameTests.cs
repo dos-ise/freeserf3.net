@@ -220,6 +220,94 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void WorkerNotAssignedWithoutTool()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Remove all axes: the lumberjack needs one to work.
+        var player = game.GetPlayer(0)!;
+        player.Inventory.Set(Material.Axe, 0);
+
+        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+
+        Assert.AreEqual(BuildingState.Active, building.State);
+        Assert.IsFalse(building.HasWorker, "Worker must not be assigned without the required tool.");
+        Assert.AreEqual(1, player.FreeSettlers);
+    }
+
+    [TestMethod]
+    public void WorkerAssignedWhenToolBecomesAvailable()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // No axes at first: the lumberjack stays unstaffed.
+        var player = game.GetPlayer(0)!;
+        player.Inventory.Set(Material.Axe, 0);
+
+        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.IsFalse(building.HasWorker);
+
+        // An axe arrives: the worker is assigned and the axe consumed.
+        player.Inventory.Add(Material.Axe, 1);
+        for (int i = 0; i < 10; i++)
+            game.TickOnce();
+
+        Assert.IsTrue(building.HasWorker);
+        Assert.AreEqual(0, player.Inventory.Get(Material.Axe));
+        Assert.AreEqual(0, player.FreeSettlers);
+    }
+
+    [TestMethod]
+    public void ToolsmithProducesConfiguredTool()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        var toolsmith = game.PlaceBuilding(BuildingType.Toolsmith, new Position(4, 4), 0);
+        for (int i = 0; i < 500; i++)
+            game.TickOnce();
+        Assert.AreEqual(BuildingState.Active, toolsmith.State);
+        Assert.IsTrue(toolsmith.HasWorker);
+
+        // The toolsmith produces the configured tool instead of its
+        // default output (hammer).
+        toolsmith.ToolsmithOutput = Material.Saw;
+        toolsmith.Input.Add(Material.Iron);
+        toolsmith.Input.Add(Material.Coal);
+
+        // The produced saw is carried to the player's stock (it is not a
+        // construction material or production input, so it does not stay
+        // at the flag). The player starts with 6 saws.
+        int sawsBefore = game.GetPlayer(0)!.Inventory.Get(Material.Saw);
+        int productionTime = toolsmith.Definition.ProductionTime;
+        for (int i = 0; i < productionTime + 10; i++)
+            game.TickOnce();
+
+        Assert.AreEqual(0, toolsmith.Output.Get(Material.Hammer));
+        Assert.AreEqual(sawsBefore + 1, game.GetPlayer(0)!.Inventory.Get(Material.Saw));
+        // The toolsmith consumed one hammer as its own tool (start: 6).
+        Assert.AreEqual(5, game.GetPlayer(0)!.Inventory.Get(Material.Hammer));
+    }
+
+    [TestMethod]
     public void StartGameTracksTreesAndStones()
     {
         var map = new Map(8);

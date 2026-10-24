@@ -34,7 +34,8 @@ public sealed class BuildingDefinition
         bool isResourceProducer = false,
         int productionTime = DefaultProductionTime,
         int soldierCapacity = 0,
-        int viewDistance = 0)
+        int viewDistance = 0,
+        Material? tool = null)
     {
         Type = type;
         Worker = worker;
@@ -49,6 +50,7 @@ public sealed class BuildingDefinition
         ProductionTime = productionTime;
         SoldierCapacity = soldierCapacity;
         ViewDistance = viewDistance;
+        Tool = tool;
     }
 
     public BuildingType Type { get; }
@@ -60,6 +62,14 @@ public sealed class BuildingDefinition
     public int WorkRadius { get; }
     public bool IsMilitary { get; }
     public bool IsLivinghouse { get; }
+
+    /// <summary>
+    /// The tool the worker needs to do the job, or null if the profession
+    /// works without a tool (like settlers-remake EMovableType.getTool).
+    /// The tool is consumed from the player's stock when the worker is
+    /// assigned.
+    /// </summary>
+    public Material? Tool { get; }
 
     /// <summary>
     /// Whether the building gathers a map resource (trees, stones) instead
@@ -137,7 +147,8 @@ public sealed class BuildingDefinition
         // --- Raw material production ---
         Add(new BuildingDefinition(BuildingType.Stonecutter, WorkerType.Stonecutter,
             new[] { (Material.Plank, 2), (Material.Stone, 3) },
-            output: Material.Stone, workRadius: 20, isResourceProducer: true, productionTime: 900));
+            output: Material.Stone, workRadius: 20, isResourceProducer: true, productionTime: 900,
+            tool: Material.Pick));
 
         Add(new BuildingDefinition(BuildingType.Forester, WorkerType.Forester,
             new[] { (Material.Stone, 1), (Material.Plank, 3) },
@@ -145,11 +156,13 @@ public sealed class BuildingDefinition
 
         Add(new BuildingDefinition(BuildingType.Lumberjack, WorkerType.Lumberjack,
             new[] { (Material.Stone, 2), (Material.Plank, 2) },
-            output: Material.Trunk, workRadius: 30, isResourceProducer: true, productionTime: 900));
+            output: Material.Trunk, workRadius: 30, isResourceProducer: true, productionTime: 900,
+            tool: Material.Axe));
 
         Add(new BuildingDefinition(BuildingType.Sawmill, WorkerType.Sawmiller,
             new[] { (Material.Plank, 3), (Material.Stone, 4) },
-            inputs: new[] { Material.Trunk }, output: Material.Plank, productionTime: 900));
+            inputs: new[] { Material.Trunk }, output: Material.Plank, productionTime: 900,
+            tool: Material.Saw));
 
         Add(new BuildingDefinition(BuildingType.CharcoalBurner, WorkerType.CharcoalBurner,
             new[] { (Material.Stone, 4), (Material.Plank, 3) },
@@ -159,27 +172,32 @@ public sealed class BuildingDefinition
         Add(new BuildingDefinition(BuildingType.Coalmine, WorkerType.Miner,
             new[] { (Material.Plank, 4), (Material.Stone, 1) },
             inputs: new[] { Material.Bread, Material.Meat, Material.Fish },
-            output: Material.Coal, isMine: true, productionTime: 1200));
+            output: Material.Coal, isMine: true, productionTime: 1200,
+            tool: Material.Pick));
 
         Add(new BuildingDefinition(BuildingType.Ironmine, WorkerType.Miner,
             new[] { (Material.Plank, 4), (Material.Stone, 1) },
             inputs: new[] { Material.Bread, Material.Meat, Material.Fish },
-            output: Material.IronOre, isMine: true, productionTime: 1200));
+            output: Material.IronOre, isMine: true, productionTime: 1200,
+            tool: Material.Pick));
 
         Add(new BuildingDefinition(BuildingType.Goldmine, WorkerType.Miner,
             new[] { (Material.Plank, 5), (Material.Stone, 1) },
             inputs: new[] { Material.Bread, Material.Meat, Material.Fish },
-            output: Material.GoldOre, isMine: true, productionTime: 1200));
+            output: Material.GoldOre, isMine: true, productionTime: 1200,
+            tool: Material.Pick));
 
         Add(new BuildingDefinition(BuildingType.Sulfurmine, WorkerType.Miner,
             new[] { (Material.Plank, 3), (Material.Stone, 2) },
             inputs: new[] { Material.Bread, Material.Meat, Material.Fish },
-            output: Material.Sulfur, isMine: true, productionTime: 1200));
+            output: Material.Sulfur, isMine: true, productionTime: 1200,
+            tool: Material.Pick));
 
         Add(new BuildingDefinition(BuildingType.Gemsmine, WorkerType.Miner,
             new[] { (Material.Plank, 3), (Material.Stone, 2) },
             inputs: new[] { Material.Bread, Material.Meat, Material.Fish },
-            output: Material.Gems, isMine: true, productionTime: 1200));
+            output: Material.Gems, isMine: true, productionTime: 1200,
+            tool: Material.Pick));
 
         // --- Melts and smiths ---
         Add(new BuildingDefinition(BuildingType.Ironmelt, WorkerType.Melter,
@@ -196,17 +214,18 @@ public sealed class BuildingDefinition
         Add(new BuildingDefinition(BuildingType.Toolsmith, WorkerType.Smith,
             new[] { (Material.Plank, 3), (Material.Stone, 5) },
             inputs: new[] { Material.Iron, Material.Coal }, output: Material.Hammer,
-            productionTime: 1500));
+            productionTime: 1500, tool: Material.Hammer));
 
         Add(new BuildingDefinition(BuildingType.Weaponsmith, WorkerType.Smith,
             new[] { (Material.Plank, 5), (Material.Stone, 7) },
             inputs: new[] { Material.Iron, Material.Coal }, output: Material.Sword,
-            productionTime: 1500));
+            productionTime: 1500, tool: Material.Hammer));
 
         // --- Food production ---
         Add(new BuildingDefinition(BuildingType.Farm, WorkerType.Farmer,
             new[] { (Material.Plank, 6), (Material.Stone, 6) },
-            output: Material.Crop, workRadius: 6, productionTime: 1200));
+            output: Material.Crop, workRadius: 6, productionTime: 1200,
+            tool: Material.Scythe));
 
         Add(new BuildingDefinition(BuildingType.PigFarm, WorkerType.PigFarmer,
             new[] { (Material.Plank, 6), (Material.Stone, 6) },
@@ -223,7 +242,8 @@ public sealed class BuildingDefinition
 
         Add(new BuildingDefinition(BuildingType.Slaughterhouse, WorkerType.Slaughterer,
             new[] { (Material.Plank, 4), (Material.Stone, 4) },
-            inputs: new[] { Material.Pig }, output: Material.Meat, productionTime: 900));
+            inputs: new[] { Material.Pig }, output: Material.Meat, productionTime: 900,
+            tool: Material.Axe));
 
         Add(new BuildingDefinition(BuildingType.Baker, WorkerType.Baker,
             new[] { (Material.Plank, 4), (Material.Stone, 5) },
@@ -232,7 +252,8 @@ public sealed class BuildingDefinition
 
         Add(new BuildingDefinition(BuildingType.Fisher, WorkerType.Fisherman,
             new[] { (Material.Stone, 2), (Material.Plank, 3) },
-            output: Material.Fish, workRadius: 30, productionTime: 900));
+            output: Material.Fish, workRadius: 30, productionTime: 900,
+            tool: Material.FishingRod));
 
         Add(new BuildingDefinition(BuildingType.Winegrower, WorkerType.Winegrower,
             new[] { (Material.Plank, 4), (Material.Stone, 4) },
@@ -304,7 +325,7 @@ public sealed class BuildingDefinition
         // --- Infrastructure ---
         Add(new BuildingDefinition(BuildingType.Dockyard, WorkerType.Dockworker,
             new[] { (Material.Plank, 3), (Material.Stone, 5) },
-            inputs: new[] { Material.Plank, Material.Iron }));
+            inputs: new[] { Material.Plank, Material.Iron }, tool: Material.Hammer));
 
         Add(new BuildingDefinition(BuildingType.Harbor, WorkerType.None,
             new[] { (Material.Plank, 2), (Material.Stone, 4) }));

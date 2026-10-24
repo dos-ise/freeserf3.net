@@ -64,6 +64,13 @@ public sealed class Building
     /// <summary>Goods produced and waiting to be picked up.</summary>
     public Inventory Output { get; } = new();
 
+    /// <summary>
+    /// The tool the toolsmith currently produces. Only used by the
+    /// toolsmith; other buildings always produce their definition's
+    /// output. Defaults to the definition's output (hammer).
+    /// </summary>
+    public Material ToolsmithOutput { get; set; } = Material.Hammer;
+
     /// <summary>Construction materials already delivered to the site.</summary>
     public Inventory DeliveredMaterials { get; } = new();
 
@@ -234,9 +241,11 @@ public sealed class Building
         foreach (var input in Definition.Inputs)
             Input.Remove(input);
 
-        // Produce the output.
-        if (Definition.Output is Material output)
-            Output.Add(output);
+        // Produce the output. The toolsmith produces the configured tool
+        // instead of its default output.
+        var output = Type == BuildingType.Toolsmith ? ToolsmithOutput : Definition.Output;
+        if (output is Material produced)
+            Output.Add(produced);
 
         ProductionProgress = 0;
     }

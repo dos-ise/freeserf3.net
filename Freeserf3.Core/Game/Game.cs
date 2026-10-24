@@ -345,6 +345,8 @@ public sealed class Game
         player.Inventory.Set(Material.Axe, tools);
         player.Inventory.Set(Material.Pick, tools);
         player.Inventory.Set(Material.Saw, tools);
+        player.Inventory.Set(Material.Scythe, tools);
+        player.Inventory.Set(Material.FishingRod, tools);
         player.Inventory.Set(Material.Sword, weapons);
         player.Inventory.Set(Material.Bow, weapons);
         player.Inventory.Set(Material.Spear, weapons);
@@ -955,11 +957,13 @@ public sealed class Game
     /// <summary>
     /// Assigns a free settler as resource worker of the given production
     /// building (lumberjack, stonecutter). The worker appears at the
-    /// building's flag and starts gathering resources.
+    /// building's flag and starts gathering resources. The required tool
+    /// is consumed from the player's stock.
     /// </summary>
     void AssignResourceWorker(Building building, Player player)
     {
         player.FreeSettlers--;
+        ConsumeWorkerTool(building, player);
         building.AssignWorker(building.Definition.Worker);
         var start = building.Flag?.Position ?? building.Position;
         var worker = new Serf(player.Index, start, SerfType.ResourceWorker)
@@ -971,6 +975,28 @@ public sealed class Game
         };
         Settlers.Add(worker);
         ResourceWorkers.Add(worker);
+    }
+
+    /// <summary>
+    /// Whether the player has the tool required for the building's worker
+    /// in their stock. Buildings whose profession works without a tool
+    /// always qualify.
+    /// </summary>
+    bool HasWorkerTool(Player player, Building building)
+    {
+        if (building.Definition.Tool is not Material tool)
+            return true;
+        return player.Inventory.Get(tool) > 0;
+    }
+
+    /// <summary>
+    /// Consumes the tool required for the building's worker from the
+    /// player's stock (no-op for professions without a tool).
+    /// </summary>
+    void ConsumeWorkerTool(Building building, Player player)
+    {
+        if (building.Definition.Tool is Material tool)
+            player.Inventory.Remove(tool);
     }
 
     /// <summary>
@@ -1196,12 +1222,15 @@ public sealed class Game
 
             building.Tick();
 
-            // A finished building gets a worker from the free settlers.
+            // A finished building gets a worker from the free settlers. The
+            // worker needs the required tool in the player's stock; without
+            // it the building stays unstaffed until the tool is produced.
             if (building.State == BuildingState.Active
                 && !building.HasWorker
                 && building.Definition.NeedsWorker
                 && player != null
-                && player.FreeSettlers > 0)
+                && player.FreeSettlers > 0
+                && HasWorkerTool(player, building))
             {
                 if (building.Definition.IsResourceProducer)
                 {
@@ -1213,6 +1242,7 @@ public sealed class Game
                 else
                 {
                     player.FreeSettlers--;
+                    ConsumeWorkerTool(building, player);
                     building.AssignWorker(building.Definition.Worker);
                 }
             }
