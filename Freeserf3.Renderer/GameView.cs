@@ -909,10 +909,10 @@ public sealed class GameView : IDisposable
         }
 
         // Player border posts: drawn on land cells where the territory ends
-        // - at the coast (a water neighbour) or at another player's land.
-        // The territory is claimed by the military buildings (dynamic),
-        // like settlers-remake. Water cells themselves never get a border
-        // post (like settlers-remake, where blocked/sea cells are skipped).
+        // - at another player's land or at unclaimed land. Water neighbors
+        // are skipped (no border along rivers or the coast, like
+        // settlers-remake BordersThread) and building cells never get a
+        // border post.
         for (int y = 0; y < size; y++)
         {
             for (int x = 0; x < size; x++)
@@ -926,6 +926,8 @@ public sealed class GameView : IDisposable
                     continue;
                 if (LandscapeMapping.IsWater(cell.Landscape))
                     continue;
+                if (IsInAnyBuildingFootprint(pos))
+                    continue;
 
                 bool isBorder = false;
                 foreach (var direction in MapGeometry.AllDirections())
@@ -935,11 +937,7 @@ public sealed class GameView : IDisposable
                         continue;
                     var neighborCell = gameMap.GetCell(neighbor);
                     if (LandscapeMapping.IsWater(neighborCell.Landscape))
-                    {
-                        // The territory ends at the coast.
-                        isBorder = true;
-                        break;
-                    }
+                        continue;
                     int neighborOwner = game?.GetTerritoryPlayer(neighbor) ?? neighborCell.Player;
                     bool neighborClaimed = game == null || game.HasTerritoryOwner(neighbor);
                     if (neighborOwner != owner || !neighborClaimed)
@@ -1084,6 +1082,32 @@ public sealed class GameView : IDisposable
     static bool IsInBuildingFootprint(Building building, Position pos)
     {
         return IsInBuildingFootprint(building.Type, building.Position, pos);
+    }
+
+    /// <summary>
+    /// Whether the position lies within the footprint of any building
+    /// (game buildings and map-file buildings).
+    /// </summary>
+    bool IsInAnyBuildingFootprint(Position pos)
+    {
+        if (game != null)
+        {
+            foreach (var building in game.Buildings)
+            {
+                if (building.State == BuildingState.Destroyed)
+                    continue;
+                if (IsInBuildingFootprint(building, pos))
+                    return true;
+            }
+        }
+
+        foreach (var building in gameMap!.Buildings)
+        {
+            var type = BuildingTypeFromMap(building.BuildingType);
+            if (type.HasValue && IsInBuildingFootprint(type.Value, new Position(building.PosX, building.PosY), pos))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>Whether the position lies within the building's footprint.</summary>
