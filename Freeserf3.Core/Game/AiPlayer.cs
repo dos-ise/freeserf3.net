@@ -29,8 +29,15 @@ public sealed class AiPlayer
     /// <summary>Ticks between two AI attack waves.</summary>
     const int AttackInterval = 3000;
 
-    /// <summary>Soldiers sent per attack wave.</summary>
-    const int AttackWaveSize = 3;
+    /// <summary>Soldiers sent per attack wave (grows with the AI's army).</summary>
+    int AttackWaveSize
+    {
+        get
+        {
+            int soldiers = game.Settlers.Count(s => s.Player == player.Index && s.Type == SerfType.Soldier);
+            return Math.Clamp(2 + soldiers / 4, 2, 8);
+        }
+    }
 
     public AiPlayer(Game game, Player player, Random random)
     {
@@ -99,7 +106,7 @@ public sealed class AiPlayer
         if (farms < 2) return BuildingType.Farm;
         if (towers < 2) return BuildingType.Tower;
         if (stonecutters == 0) return BuildingType.Stonecutter;
-        if (livingHouses < 4) return BuildingType.SmallLivinghouse;
+        if (livingHouses < 8) return BuildingType.SmallLivinghouse;
 
         // Food production chain: flour and bread from the farm's crop.
         if (mills == 0) return BuildingType.Mill;
