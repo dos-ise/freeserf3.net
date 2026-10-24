@@ -156,6 +156,12 @@ public sealed class Serf : Movable
     /// </summary>
     public bool IsDeployed { get; set; }
 
+    /// <summary>
+    /// Whether the current attack target was ordered by the player. Ordered
+    /// targets are not dropped when they are far away.
+    /// </summary>
+    public bool OrderedAttack { get; set; }
+
     /// <summary>The weapon the soldier carries (sword, spear or bow).</summary>
     public Material Weapon { get; set; } = Material.Sword;
 

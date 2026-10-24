@@ -1333,11 +1333,14 @@ public sealed class Game
                 continue;
 
             // Drop a target that died, belongs to the same player or fled.
+            // Ordered targets are kept even when far away.
             if (soldier.AttackTarget is Serf target
                 && (target.IsDead || target.Player == soldier.Player
-                    || MapGeometry.GetDistance(soldier.Position, target.Position) > SoldierSearchRadius))
+                    || (!soldier.OrderedAttack
+                        && MapGeometry.GetDistance(soldier.Position, target.Position) > SoldierSearchRadius)))
             {
                 soldier.AttackTarget = null;
+                soldier.OrderedAttack = false;
             }
 
             // Drop a building target that was destroyed or belongs to the
@@ -1452,6 +1455,7 @@ public sealed class Game
                     {
                         kills.Add(enemy);
                         soldier.AttackTarget = null;
+                        soldier.OrderedAttack = false;
                         soldier.SoldierState = SoldierState.Idle;
                     }
                 }
@@ -1574,7 +1578,10 @@ public sealed class Game
         foreach (var other in Settlers)
         {
             if (other.AttackTarget == settler)
+            {
                 other.AttackTarget = null;
+                other.OrderedAttack = false;
+            }
         }
 
         PlaySound?.Invoke(35); // settler killed

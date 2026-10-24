@@ -1808,6 +1808,42 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void OrderedAttackKeepsFarTarget()
+    {
+        var map = new Map(32);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Players.Add(new MapPlayerInfo { Name = "P1" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // A soldier with an ordered target far away keeps the target.
+        var barracks = new Building(BuildingType.Tower, new Position(4, 4), 0);
+        barracks.MarkActive();
+        var soldier = new Serf(0, new Position(4, 4), SerfType.Soldier)
+        {
+            Weapon = Material.Sword,
+            Health = 200f,
+            Barracks = barracks
+        };
+        barracks.Soldiers.Add(soldier);
+        game.Settlers.Add(soldier);
+
+        var enemy = new Serf(1, new Position(20, 20), SerfType.Worker);
+        game.Settlers.Add(enemy);
+
+        soldier.AttackTarget = enemy;
+        soldier.OrderedAttack = true;
+        soldier.SoldierState = SoldierState.Attacking;
+
+        for (int i = 0; i < 200; i++)
+            game.TickOnce();
+
+        Assert.AreSame(enemy, soldier.AttackTarget, "The ordered target should be kept even when far away.");
+    }
+
+    [TestMethod]
     public void HumanIsDefeatedWithoutBuildingsOrSettlers()
     {
         var map = new Map(16);

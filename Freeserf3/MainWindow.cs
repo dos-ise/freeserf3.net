@@ -128,7 +128,7 @@ public sealed class MainWindow : IDisposable
                 }
                 else
                 {
-                    gameView.HandleRightClick();
+                    gameView.HandleRightClick(position, window.Size.X, window.Size.Y);
                 }
             }
         }

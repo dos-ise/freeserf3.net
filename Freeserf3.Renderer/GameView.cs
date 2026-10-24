@@ -63,6 +63,7 @@ public sealed class GameView : IDisposable
     InteractionMode mode = InteractionMode.Select;
     BuildingType buildType = BuildingType.Lumberjack;
     Position? selected;
+    Serf? selectedSoldier;
     Vector2? mousePosition;
     int lastScreenWidth, lastScreenHeight;
 
@@ -445,22 +446,90 @@ public sealed class GameView : IDisposable
         }
     }
 
-    /// <summary>Handles a right click: back to select mode.</summary>
-    public void HandleRightClick()
+    /// <summary>
+    /// Handles a right click: back to select mode, or order the selected
+    /// soldier to attack/march to the clicked position.
+    /// </summary>
+    public void HandleRightClick(Vector2 position, int screenWidth, int screenHeight)
     {
         if (mode != InteractionMode.Select)
         {
             mode = InteractionMode.Select;
             controlPanel?.ClearSelection();
             log("Mode: select");
+            return;
         }
-        else
+
+        // A selected soldier is ordered to the clicked position: attack an
+        // enemy settler or building there, otherwise march to it.
+        if (selectedSoldier != null && game != null && gameMap != null)
         {
-            // Deselect the selected building.
-            selected = null;
-            if (controlPanel != null)
-                controlPanel.SelectedMapBuilding = null;
+            var pos = MouseToGrid(position, screenWidth, screenHeight);
+            if (gameMap.IsInBounds(pos))
+            {
+                OrderSelectedSoldier(pos);
+                return;
+            }
         }
+
+        // Deselect the selected building.
+        selected = null;
+        selectedSoldier = null;
+        if (controlPanel != null)
+            controlPanel.SelectedMapBuilding = null;
+    }
+
+    /// <summary>
+    /// Orders the selected soldier to the given position: attack the enemy
+    /// settler or building there, otherwise march to it.
+    /// </summary>
+    void OrderSelectedSoldier(Position pos)
+    {
+        var soldier = selectedSoldier;
+        if (soldier == null || game == null)
+            return;
+
+        // Attack an enemy settler at the position.
+        foreach (var settler in game.Settlers)
+        {
+            if (settler.Player == soldier.Player || settler.IsDead)
+                continue;
+            if (settler.Position != pos)
+                continue;
+
+            soldier.AttackTarget = settler;
+            soldier.AttackBuilding = null;
+            soldier.MarchTarget = null;
+            soldier.OrderedAttack = true;
+            soldier.SoldierState = SoldierState.Attacking;
+            log($"Soldier ordered to attack {settler.Type} at {pos}");
+            return;
+        }
+
+        // Attack an enemy building at the position.
+        foreach (var building in game.Buildings)
+        {
+            if (building.Player == soldier.Player || building.State == BuildingState.Destroyed)
+                continue;
+            if (!IsInBuildingFootprint(building, pos))
+                continue;
+
+            soldier.AttackBuilding = building;
+            soldier.AttackTarget = null;
+            soldier.MarchTarget = null;
+            soldier.OrderedAttack = true;
+            soldier.SoldierState = SoldierState.Attacking;
+            log($"Soldier ordered to attack {building.Type} at {pos}");
+            return;
+        }
+
+        // Otherwise march to the position.
+        soldier.AttackTarget = null;
+        soldier.AttackBuilding = null;
+        soldier.MarchTarget = pos;
+        soldier.OrderedAttack = false;
+        soldier.SoldierState = SoldierState.Attacking;
+        log($"Soldier ordered to march to {pos}");
     }
 
     /// <summary>Whether the position lies on the left-side control panel.</summary>
@@ -512,6 +581,7 @@ public sealed class GameView : IDisposable
         else
         {
             selected = null;
+            selectedSoldier = null;
             if (controlPanel != null)
                 controlPanel.SelectedMapBuilding = null;
         }
@@ -538,6 +608,7 @@ public sealed class GameView : IDisposable
         buildType = type;
         mode = InteractionMode.Build;
         selected = null;
+        selectedSoldier = null;
         if (controlPanel != null)
             controlPanel.SelectedMapBuilding = null;
         soundManager?.PlaySound(62); // UI click
@@ -865,6 +936,15 @@ public sealed class GameView : IDisposable
         {
             gameObjects.AddSelectionMarker(sel, gameMap.GetCell(sel).Height);
         }
+
+        // Selected soldier marker.
+        if (selectedSoldier != null)
+        {
+            if (selectedSoldier.IsDead || game == null || !game.Settlers.Contains(selectedSoldier))
+                selectedSoldier = null;
+            else if (gameMap.IsInBounds(selectedSoldier.Position))
+                gameObjects.AddSelectionMarker(selectedSoldier.Position, gameMap.GetCell(selectedSoldier.Position).Height);
+        }
     }
 
     /// <summary>
@@ -928,11 +1008,28 @@ public sealed class GameView : IDisposable
         return settler.IsWalking ? (int)(settler.MoveProgress * 11) % 11 : 0;
     }
 
-    /// <summary>Selects the building at the given position, if any.</summary>
+    /// <summary>Selects the soldier or building at the given position, if any.</summary>
     void SelectAt(Position pos)
     {
         selected = null;
+        selectedSoldier = null;
         controlPanel.SelectedMapBuilding = null;
+
+        // A soldier of the human player is selected first.
+        if (game != null)
+        {
+            foreach (var settler in game.Settlers)
+            {
+                if (settler.Player != 0 || settler.Type != SerfType.Soldier)
+                    continue;
+                if (settler.Position != pos)
+                    continue;
+
+                selectedSoldier = settler;
+                log($"Selected soldier ({settler.Weapon}) at {settler.Position}");
+                return;
+            }
+        }
 
         if (game != null)
         {
@@ -1014,6 +1111,7 @@ public sealed class GameView : IDisposable
 
         game.DemolishBuilding(building);
         selected = null;
+        selectedSoldier = null;
         controlPanel.SelectedMapBuilding = null;
         log($"Demolished {building.Type} at {pos}");
         return true;
