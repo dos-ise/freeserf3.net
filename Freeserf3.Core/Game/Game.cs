@@ -1315,20 +1315,41 @@ public sealed class Game
 
     /// <summary>
     /// Assigns a free settler as builder of the given construction site.
-    /// The builder appears at the site's flag and starts building.
+    /// The builder appears at a bricklayer position around the building
+    /// (facing the building) and starts building; if none is walkable it
+    /// falls back to the site's flag.
     /// </summary>
     void AssignBuilder(Building building, Player player)
     {
         player.FreeSettlers--;
-        var start = building.Flag?.Position ?? building.Position;
+        var bricklayer = FindBricklayerPosition(building);
+        var start = bricklayer.HasValue
+            ? new Position(building.Position.X + bricklayer.Value.Dx, building.Position.Y + bricklayer.Value.Dy)
+            : building.Flag?.Position ?? building.Position;
         var builder = new Serf(player.Index, start, SerfType.Builder)
         {
             ConstructionSite = building,
             BuilderState = BuilderState.Building,
-            MoveInterval = Serf.DefaultMoveInterval
+            MoveInterval = Serf.DefaultMoveInterval,
+            Facing = bricklayer?.Facing ?? Direction.SouthWest
         };
         Settlers.Add(builder);
         Builders.Add(builder);
+    }
+
+    /// <summary>
+    /// Finds the first walkable bricklayer position for the building, or
+    /// null if none of the defined positions is walkable.
+    /// </summary>
+    BricklayerPosition? FindBricklayerPosition(Building building)
+    {
+        foreach (var pos in BricklayerPositions.For(building.Type))
+        {
+            var candidate = new Position(building.Position.X + pos.Dx, building.Position.Y + pos.Dy);
+            if (Map.IsInBounds(candidate) && IsWalkable(Map, candidate))
+                return pos;
+        }
+        return null;
     }
 
     /// <summary>

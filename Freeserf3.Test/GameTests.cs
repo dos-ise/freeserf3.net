@@ -183,6 +183,29 @@ public class GameTests : DataTestBase
     }
 
     [TestMethod]
+    public void BuilderStandsAtBricklayerPosition()
+    {
+        var map = new Map(8);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Lumberjack bricklayer positions relative to the building:
+        // (-1,2) NE, (0,3) NE, (4,3) NW, (3,4) NW. Building at (4,4)
+        // gives (3,6), (4,7), (8,7), (7,8) - the first two are in bounds.
+        var building = game.PlaceBuilding(BuildingType.Lumberjack, new Position(4, 4), 0);
+        Assert.AreEqual(1, game.Builders.Count);
+
+        var builder = game.Builders[0];
+        // The builder stands at the first walkable bricklayer position,
+        // not at the flag, and faces the building.
+        Assert.AreEqual(new Position(3, 6), builder.Position);
+        Assert.AreEqual(Direction.NorthEast, builder.Facing);
+    }
+
+    [TestMethod]
     public void ConstructionWaitsForFreeSettler()
     {
         var map = new Map(8);
