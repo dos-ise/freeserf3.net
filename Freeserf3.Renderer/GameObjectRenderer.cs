@@ -56,6 +56,10 @@ public sealed class GameObjectRenderer : IDisposable
     /// <summary>Roman settler sprites are stored in dat file 10.</summary>
     public const int SettlersFile = 10;
 
+    /// <summary>Roman soldier sprites are stored in dat file 12 (from
+    /// settlers-remake movables-ROMAN.txt: swordsman/pikeman/bowman).</summary>
+    public const int SoldiersFile = 12;
+
     /// <summary>Worker action sprites (digger, bricklayer, dockworker) are stored in dat file 11.</summary>
     public const int WorkersFile = 11;
 
@@ -282,11 +286,12 @@ public sealed class GameObjectRenderer : IDisposable
 
     /// <summary>
     /// Loads the building/settler images. <paramref name="buildings"/> is
-    /// dat file 13, <paramref name="settlers"/> the roman settler file (10).
+    /// dat file 13, <paramref name="settlers"/> the roman settler file (10)
+    /// and <paramref name="soldiers"/> the roman soldier file (12).
     /// <paramref name="playerColors"/> lists the player color indices that
     /// appear on the map; only those settler tints are generated.
     /// </summary>
-    public void Load(DatFileReader buildings, DatFileReader settlers, IEnumerable<int> playerColors)
+    public void Load(DatFileReader buildings, DatFileReader settlers, DatFileReader soldiers, IEnumerable<int> playerColors)
     {
         // Building sprites. Image 0 is the finished building, image 1 the
         // construction site (from the building XMLs: for="FINAL" / for="BUILD").
@@ -371,15 +376,16 @@ public sealed class GameObjectRenderer : IDisposable
             }
         }
 
-        // Soldier walking sequences (swordsman, pikeman, bowman).
+        // Soldier walking sequences (swordsman, pikeman, bowman) from the
+        // soldier file (dat 12).
         foreach (int sequence in SoldierSequences.Values.Distinct())
         {
-            var frames = settlers.GetSettlerSequence(sequence);
+            var frames = soldiers.GetSettlerSequence(sequence);
             if (frames.Length == 0)
                 continue;
 
-            var torsos = settlers.GetSettlerTorsoSequence(sequence);
-            var shadows = settlers.GetSettlerShadowSequence(sequence);
+            var torsos = soldiers.GetSettlerTorsoSequence(sequence);
+            var shadows = soldiers.GetSettlerShadowSequence(sequence);
 
             foreach (int color in colors)
             {

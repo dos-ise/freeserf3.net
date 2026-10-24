@@ -196,10 +196,12 @@ public sealed class GameView : IDisposable
         terrain = new TerrainRenderer(State.Gl);
         terrain.Build(map, gfx);
 
-        // Game objects: buildings (dat 13), settlers (dat 10), workers (dat
-        // 11, bricklayer/digger actions), roads, flags.
+        // Game objects: buildings (dat 13), settlers (dat 10), soldiers
+        // (dat 12), workers (dat 11, bricklayer/digger actions), roads,
+        // flags.
         var buildingsGfx = gameData.LoadGfxFile(GameObjectRenderer.BuildingsFile);
         var settlersGfx = gameData.LoadGfxFile(GameObjectRenderer.SettlersFile);
+        var soldiersGfx = gameData.LoadGfxFile(GameObjectRenderer.SoldiersFile);
         var workersGfx = gameData.LoadGfxFile(GameObjectRenderer.WorkersFile);
         var objectsGfx = gameData.LoadGfxFile(GameObjectRenderer.ObjectsFile);
         if (buildingsGfx != null && settlersGfx != null)
@@ -208,7 +210,7 @@ public sealed class GameView : IDisposable
             var playerColors = map.Settlers.Select(s => (int)s.Party)
                 .Concat(map.Buildings.Select(b => (int)b.Party))
                 .Distinct();
-            gameObjects.Load(buildingsGfx, settlersGfx, playerColors);
+            gameObjects.Load(buildingsGfx, settlersGfx, soldiersGfx, playerColors);
             if (workersGfx != null)
                 gameObjects.LoadWorkers(workersGfx, playerColors);
             if (objectsGfx != null)

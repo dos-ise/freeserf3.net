@@ -92,7 +92,10 @@ public enum SoldierState
     Patrolling,
 
     /// <summary>Walking back to the building.</summary>
-    Returning
+    Returning,
+
+    /// <summary>Moving toward or fighting an enemy.</summary>
+    Attacking
 }
 
 /// <summary>
@@ -151,6 +154,18 @@ public sealed class Serf : Movable
 
     /// <summary>Ticks spent idle at the building.</summary>
     public int SoldierIdleTicks { get; set; }
+
+    /// <summary>The enemy the soldier is currently fighting, or null.</summary>
+    public Serf? AttackTarget { get; set; }
+
+    /// <summary>Ticks since the soldier's last attack.</summary>
+    public int AttackTicks { get; set; }
+
+    /// <summary>The soldier's remaining health.</summary>
+    public float Health { get; set; } = 100f;
+
+    /// <summary>Whether the soldier has been killed in combat.</summary>
+    public bool IsDead { get; set; }
 
     /// <summary>The good currently carried, or null.</summary>
     public Material? CarriedGood { get; set; }

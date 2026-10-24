@@ -93,6 +93,32 @@ public sealed class Game
     /// </summary>
     public const int AttackRadius = 40;
 
+    /// <summary>
+    /// Radius in which a soldier searches for enemies
+    /// (settlers-remake Constants.SOLDIER_SEARCH_RADIUS).
+    /// </summary>
+    public const int SoldierSearchRadius = 30;
+
+    /// <summary>Ticks between two soldier attacks (about one per second).</summary>
+    public const int SoldierAttackInterval = 60;
+
+    /// <summary>
+    /// Combat stats per weapon (from settlers-remake EMovableType):
+    /// health, attack strength and attack radius.
+    /// </summary>
+    static readonly Dictionary<Material, (float Health, float Strength, int Radius)> SoldierStats = new()
+    {
+        [Material.Sword] = (100f, 10f, 1),
+        [Material.Spear] = (200f, 5f, 2),
+        [Material.Bow] = (100f, 6f, 15)
+    };
+
+    /// <summary>Gets the combat stats of a soldier's weapon.</summary>
+    static (float Health, float Strength, int Radius) GetSoldierStats(Material weapon)
+    {
+        return SoldierStats.TryGetValue(weapon, out var stats) ? stats : (100f, 10f, 1);
+    }
+
     /// <summary>Per-cell territory owner (index = y * Size + x), 255 = no owner.</summary>
     byte[] territory = Array.Empty<byte>();
 
@@ -1116,14 +1142,16 @@ public sealed class Game
                 Barracks = building,
                 Weapon = weapon,
                 SoldierState = SoldierState.Idle,
-                MoveInterval = Serf.DefaultMoveInterval
+                MoveInterval = Serf.DefaultMoveInterval,
+                Health = GetSoldierStats(weapon).Health
             };
             building.Soldiers.Add(soldier);
             Settlers.Add(soldier);
         }
 
-        // Soldiers patrol around their building.
+        // Soldiers patrol around their building and fight enemies.
         TickSoldierPatrol();
+        TickSoldierCombat();
 
         // Tower attacks: military buildings with soldiers shoot at enemy
         // settlers in range (checked every 30 ticks).
@@ -1141,11 +1169,11 @@ public sealed class Game
             if (target == null)
                 continue;
 
-            // The enemy settler is defeated and removed from the game.
-            Settlers.Remove(target);
-            Collectors.Remove(target);
-            Builders.Remove(target);
-            ResourceWorkers.Remove(target);
+            // The tower hits the enemy; a soldier or settler with no
+            // health left is removed from the game.
+            target.Health -= 20f;
+            if (target.Health <= 0)
+                KillSettler(target);
         }
     }
 
@@ -1251,6 +1279,134 @@ public sealed class Game
             nearestDistance = distance;
         }
         return nearest;
+    }
+
+    /// <summary>
+    /// Finds the nearest living enemy settler within the given radius of
+    /// the soldier, or null.
+    /// </summary>
+    Serf? FindEnemyNear(Serf soldier, int radius)
+    {
+        Serf? nearest = null;
+        int nearestDistance = int.MaxValue;
+
+        foreach (var settler in Settlers)
+        {
+            if (settler.Player == soldier.Player)
+                continue;
+            if (settler.IsDead)
+                continue;
+
+            int distance = MapGeometry.GetDistance(soldier.Position, settler.Position);
+            if (distance > radius || distance >= nearestDistance)
+                continue;
+
+            nearest = settler;
+            nearestDistance = distance;
+        }
+        return nearest;
+    }
+
+    /// <summary>
+    /// Advances the soldier combat: each soldier searches for enemies in
+    /// its search radius, moves toward them and attacks when in range.
+    /// A soldier whose health reaches zero is removed from the game.
+    /// </summary>
+    void TickSoldierCombat()
+    {
+        var soldiers = Settlers.Where(s => s.Type == SerfType.Soldier && !s.IsDead).ToList();
+        var kills = new List<Serf>();
+
+        foreach (var soldier in soldiers)
+        {
+            if (soldier.Barracks == null || soldier.Barracks.State != BuildingState.Active)
+                continue;
+
+            // Drop a target that died, belongs to the same player or fled.
+            if (soldier.AttackTarget is Serf target
+                && (target.IsDead || target.Player == soldier.Player
+                    || MapGeometry.GetDistance(soldier.Position, target.Position) > SoldierSearchRadius))
+            {
+                soldier.AttackTarget = null;
+            }
+
+            // Search for a new enemy.
+            if (soldier.AttackTarget == null)
+            {
+                var found = FindEnemyNear(soldier, SoldierSearchRadius);
+                if (found != null)
+                {
+                    soldier.AttackTarget = found;
+                    soldier.SoldierState = SoldierState.Attacking;
+                }
+            }
+
+            if (soldier.AttackTarget is not Serf enemy)
+            {
+                // No enemy: resume patrolling.
+                if (soldier.SoldierState == SoldierState.Attacking)
+                    soldier.SoldierState = SoldierState.Idle;
+                continue;
+            }
+
+            var stats = GetSoldierStats(soldier.Weapon);
+            int distance = MapGeometry.GetDistance(soldier.Position, enemy.Position);
+
+            if (distance <= stats.Radius)
+            {
+                // In attack range: hit the enemy every few ticks.
+                soldier.AttackTicks++;
+                if (soldier.AttackTicks >= SoldierAttackInterval)
+                {
+                    soldier.AttackTicks = 0;
+                    enemy.Health -= stats.Strength;
+                    if (enemy.Health <= 0)
+                    {
+                        kills.Add(enemy);
+                        soldier.AttackTarget = null;
+                        soldier.SoldierState = SoldierState.Idle;
+                    }
+                }
+            }
+            else
+            {
+                // Move toward the enemy. The path is only recomputed when
+                // the soldier is not already walking, so the movement stays
+                // smooth.
+                if (soldier.State != MovableState.Walking)
+                {
+                    var path = Pathfinder.FindPath(Map, soldier.Position, enemy.Position, IsWalkable);
+                    if (path != null && path.Count > 0)
+                        soldier.SetPath(path);
+                }
+                soldier.Tick();
+            }
+        }
+
+        foreach (var kill in kills)
+            KillSettler(kill);
+    }
+
+    /// <summary>
+    /// Removes a killed settler from the game: from the settler lists, the
+    /// building's soldier list and the attack targets of other soldiers.
+    /// </summary>
+    void KillSettler(Serf settler)
+    {
+        settler.IsDead = true;
+        Settlers.Remove(settler);
+        Collectors.Remove(settler);
+        Builders.Remove(settler);
+        ResourceWorkers.Remove(settler);
+
+        if (settler.Type == SerfType.Soldier && settler.Barracks != null)
+            settler.Barracks.Soldiers.Remove(settler);
+
+        foreach (var other in Settlers)
+        {
+            if (other.AttackTarget == settler)
+                other.AttackTarget = null;
+        }
     }
 
     /// <summary>

@@ -1638,15 +1638,59 @@ public class GameTests : DataTestBase
         var enemy = new Serf(1, new Position(4, 5), SerfType.Worker);
         game.Settlers.Add(enemy);
 
-        // The tower attacks and defeats the enemy.
+        // The tower attacks and defeats the enemy (20 damage per hit,
+        // every 30 ticks, so 100 health needs ~150 ticks).
         bool defeated = false;
-        for (int i = 0; i < 100 && !defeated; i++)
+        for (int i = 0; i < 300 && !defeated; i++)
         {
             game.TickOnce();
             defeated = !game.Settlers.Contains(enemy);
         }
 
         Assert.IsTrue(defeated, "The tower did not defeat the enemy settler.");
+    }
+
+    [TestMethod]
+    public void SoldierAttacksEnemyInRange()
+    {
+        var map = new Map(16);
+        map.Players.Add(new MapPlayerInfo { Name = "P0" });
+        map.Players.Add(new MapPlayerInfo { Name = "P1" });
+        map.Settlers.Add(new MapSettler { Party = 0, PosX = 1, PosY = 1 });
+        SetGrass(map);
+        var game = new Game(map, 42);
+        game.StartGame();
+
+        // Two enemy soldiers close to each other.
+        var attackerBarracks = new Building(BuildingType.Tower, new Position(4, 4), 0);
+        attackerBarracks.MarkActive();
+        var defenderBarracks = new Building(BuildingType.Tower, new Position(4, 5), 1);
+        defenderBarracks.MarkActive();
+        var attacker = new Serf(0, new Position(4, 4), SerfType.Soldier)
+        {
+            Weapon = Material.Sword,
+            Health = 200f,
+            Barracks = attackerBarracks
+        };
+        var defender = new Serf(1, new Position(4, 5), SerfType.Soldier)
+        {
+            Weapon = Material.Sword,
+            Health = 100f,
+            Barracks = defenderBarracks
+        };
+        game.Settlers.Add(attacker);
+        game.Settlers.Add(defender);
+
+        // The attacker moves to the defender and hits it until it dies.
+        bool defeated = false;
+        for (int i = 0; i < 2000 && !defeated; i++)
+        {
+            game.TickOnce();
+            defeated = !game.Settlers.Contains(defender);
+        }
+
+        Assert.IsTrue(defeated, "The soldier did not defeat the enemy soldier.");
+        Assert.IsTrue(attacker.Health > 0, "The attacking soldier should survive.");
     }
 }
 
